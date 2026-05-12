@@ -1,0 +1,120 @@
+const express = require("express");
+const router = express.Router();
+const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const { getMileageSnapshot } = require("../utils/mileage.cjs");
+
+router.post("/", async (req, res) => {
+  try {
+    const {
+      vehicle_id,
+      host_id,
+      driver_id,
+      rental_type,
+      start_date,
+      end_date,
+      unlimited_miles_selected,
+      total_price_cents,
+      pickup_time,
+      dropoff_time,
+    } = req.body;
+
+    // 🔍 fetch vehicle mileage settings
+    const { data: vehicle, error: vehicleErr } = await supabaseAdmin
+      .from("vehicles")
+      .select("*")
+      .eq("id", vehicle_id)
+      .single();
+
+    if (vehicleErr || !vehicle) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
+
+    // 📊 mileage snapshot
+    const mileage = getMileageSnapshot({
+      rentalType: rental_type,
+      vehicle,
+      unlimitedSelected: unlimited_miles_selected,
+    });
+
+    const finalTotal =
+      Number(total_price_cents || 0) +
+      Number(mileage.unlimited_miles_fee_cents || 0);
+
+   const { data: bookingConflicts, error: bookingConflictError } = await supabaseAdmin
+  .from("bookings")
+  .select("id,start_date,end_date,status")
+  .eq("vehicle_id", vehicle_id)
+  .in("status", [
+    "requested",
+    "pending",
+    "deposit_paid",
+    "pickup_confirmed",
+    "active",
+  ])
+  .lte("start_date", end_date)
+  .gte("end_date", start_date);
+
+if (bookingConflictError) {
+  return res.status(500).json({
+    error: bookingConflictError.message,
+  });
+}
+
+if (bookingConflicts?.length) {
+  return res.status(400).json({
+    error: "Vehicle is unavailable for selected dates.",
+  });
+}
+
+const { data: blockedDates, error: blockedDatesError } = await supabaseAdmin
+  .from("vehicle_unavailable_dates")
+  .select("id,start_date,end_date")
+  .eq("vehicle_id", vehicle_id)
+  .lte("start_date", end_date)
+  .gte("end_date", start_date);
+
+if (blockedDatesError) {
+  return res.status(500).json({
+    error: blockedDatesError.message,
+  });
+}
+
+if (blockedDates?.length) {
+  return res.status(400).json({
+    error: "Vehicle is blocked by the host for selected dates.",
+  });
+}
+
+      // 💾 insert booking
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .insert({
+        vehicle_id,
+        host_id,
+        driver_id,
+        rental_type,
+        start_date,
+        end_date,
+        total_price_cents: finalTotal,
+        status: "requested",
+        metadata: { is_test: true },
+        pickup_time,
+        dropoff_time,
+
+        ...mileage,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ ok: true, booking: data });
+  } catch (e) {
+    console.log("CREATE BOOKING ERROR:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+module.exports = router;

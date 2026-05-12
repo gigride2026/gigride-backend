@@ -1,0 +1,24 @@
+# Query: middlewares/auth
+# ContextLines: 1
+
+4 results - 4 files
+
+routes/bookings.cjs:
+  4  
+  5: const auth = require('../middlewares/auth.cjs');
+  6  
+
+routes/hosts.cjs:
+   9  const supabase = require('../utils/supabaseClient');
+  10: const authMiddleware = require('../middlewares/auth.cjs');
+  11  
+
+routes/payments.cjs:
+   9  // 🔐 Auth disabled temporarily for testing
+  10: // const authMiddleware = require('../middlewares/auth.cjs');
+  11  // router.use(authMiddleware);
+
+routes/vehicles.cjs:
+  3  const supabase = require('../utils/supabaseClient');
+  4: const auth = require('../middlewares/auth.cjs');
+  5  

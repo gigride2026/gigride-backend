@@ -1,0 +1,30 @@
+{
+  "name": "gigride-backend",
+  "version": "1.0.0",
+  "description": "GigRide backend API",
+  "main": "index.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.cjs",
+    "dev": "node index.cjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "expo": "^55.0.11",
+    "expo-constants": "~55.0.15",
+    "expo-device": "~55.0.15",
+    "expo-image-picker": "~55.0.18",
+    "expo-notifications": "~55.0.20",
+    "expo-server-sdk": "^6.1.0",
+    "express": "^4.19.2",
+    "node-cron": "^4.2.1",
+    "stripe": "^17.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.10",
+    "nodemon": "^3.1.14",
+    "typescript": "~5.9.2"
+  }
+}

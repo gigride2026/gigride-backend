@@ -1,0 +1,34 @@
+# Query: ../utils/supabaseClient
+# ContextLines: 1
+
+6 results - 6 files
+
+routes/bookings.cjs:
+  2  const router = express.Router();
+  3: const supabase = require("../utils/../utils/supabaseClient.cjs");
+  4  
+
+routes/drivers.cjs:
+  3  const router = express.Router();
+  4: const supabase = require('../utils/../utils/supabaseClient.cjs');
+  5  
+
+routes/hosts.cjs:
+  8  const stripe = require('../utils/stripeClient.cjs');
+  9: const supabase = require('../utils/../utils/supabaseClient.cjs');
+  10  const authMiddleware = require('../middlewares/auth.cjs');
+
+routes/payments.cjs:
+  6  const stripe = require('../utils/stripeClient.cjs');
+  7: const supabase = require('../utils/../utils/supabaseClient.cjs');
+  8  
+
+routes/payouts.cjs:
+  3  const router = express.Router();
+  4: const supabase = require('../utils/../utils/supabaseClient.cjs');
+  5  
+
+routes/vehicles.cjs:
+  2  const router = express.Router();
+  3: const supabase = require('../utils/../utils/supabaseClient.cjs');
+  4  const auth = require('../middlewares/auth');

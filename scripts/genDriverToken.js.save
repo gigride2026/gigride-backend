@@ -1,0 +1,108 @@
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+
+console.log('SCRIPT STARTED');
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const DRIVER_ID = '32b7f66e-8a5e-47db-8272-57bfb2268347';
+const TEMP_PASSWORD = 'TempPass123!';
+
+async function run() {
+  console.log('SETTING PASSWORD...');
+
+  const { error: updateError } =
+    await supabaseAdmin.auth.admin.updateUserById(
+      DRIVER_ID,
+      { password: TEMP_PASSWORD }
+    );
+
+  if (updateError) {
+    console.error('UPDATE ERROR:', updateError);
+    return;
+  }
+
+  console.log('PASSWORD SET');
+
+  const supabaseClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY
+  );
+
+  console.log('LOGGING IN...');
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email: 'driver@local.dev',
+      password: TEMP_PASSWORD,
+    });
+
+  if (error) {
+    console.error('LOGIN ERROR:', error);
+    return;
+  }
+
+  console.log('\n=== ACCESS TOKEN ===\n');
+  console.log(data.session.access_token);
+  console.log('\n====================\n');
+}
+
+run().catch(console.error);
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+
+console.log('SCRIPT STARTED');
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const DRIVER_ID = '32b7f66e-8a5e-47db-8272-57bfb2268347';
+const TEMP_PASSWORD = 'TempPass123!';
+
+async function run() {
+  console.log('SETTING PASSWORD...');
+
+  const { error: updateError } =
+    await supabaseAdmin.auth.admin.updateUserById(
+      DRIVER_ID,
+      { password: TEMP_PASSWORD }
+    );
+
+  if (updateError) {
+    console.error('UPDATE ERROR:', updateError);
+    return;
+  }
+
+  console.log('PASSWORD SET');
+
+  const supabaseClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY
+  );
+
+  console.log('LOGGING IN...');
+
+  const { data, error } =
+    await supabaseClient.auth.signInWithPassword({
+      email: 'driver@local.dev',
+      password: TEMP_PASSWORD,
+    });
+
+  if (error) {
+    console.error('LOGIN ERROR:', error);
+    return;
+  }
+
+  console.log('\n=== ACCESS TOKEN ===\n');
+  console.log(data.session.access_token);
+  console.log('\n====================\n');
+}
+
+run().catch(console.error);
+nano scripts/genDriverToken.js
+
