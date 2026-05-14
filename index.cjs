@@ -18,6 +18,7 @@ const depositRefundRoutes = require("./routes/depositRefunds.cjs");
 const { startSchedulers } = require("./jobs/scheduler.cjs");
 const pushRoutes = require("./routes/push.cjs");
 const insuranceNotificationsRoutes = require("./routes/insuranceNotifications.cjs");
+const adminAlerts = require("./routes/adminAlerts.cjs");
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api/bookings", bookingsComplete);
 app.use("/api/deposit-refunds", depositRefundRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/notifications", insuranceNotificationsRoutes);
+app.use("/api/admin-alerts", adminAlerts);
 
 module.exports = app;
 
