@@ -33,24 +33,42 @@ async function sendExpoPushNotification({ to, title, body, data = {} }) {
 }
 
 async function notifyUser({ supabaseAdmin, userId, title, body, data = {} }) {
-  if (!supabaseAdmin || !userId) return;
+  console.log("notifyUser called with userId:", userId);
+
+  if (!supabaseAdmin) {
+    console.log("notifyUser stopped: missing supabaseAdmin");
+    return;
+  }
+
+  if (!userId) {
+    console.log("notifyUser stopped: missing userId");
+    return;
+  }
+
+  const cleanUserId = String(userId).trim();
 
   const { data: tokens, error } = await supabaseAdmin
     .from("user_push_tokens")
-    .select("expo_push_token")
-    .eq("user_id", userId);
+    .select("id, user_id, expo_push_token, platform, updated_at")
+    .eq("user_id", cleanUserId);
+
+  console.log("Push token lookup userId:", cleanUserId);
+  console.log("Push token lookup error:", error);
+  console.log("Push tokens found:", tokens);
 
   if (error) {
-    console.log("Push token lookup error:", error.message);
+    console.log("Push token lookup error message:", error.message);
     return;
   }
 
   if (!tokens || tokens.length === 0) {
-    console.log("No push tokens found for user:", userId);
+    console.log("No push tokens found for user:", cleanUserId);
     return;
   }
 
   for (const row of tokens) {
+    console.log("Sending push to token:", row.expo_push_token);
+
     await sendExpoPushNotification({
       to: row.expo_push_token,
       title,

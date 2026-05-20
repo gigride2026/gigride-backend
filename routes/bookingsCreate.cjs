@@ -84,6 +84,22 @@ if (blockedDates?.length) {
     error: "Vehicle is blocked by the host for selected dates.",
   });
 }
+const authHeader = req.headers.authorization || "";
+
+const token = authHeader.replace("Bearer ", "");
+
+const {
+  data: { user },
+  error: authError,
+} = await supabaseAdmin.auth.getUser(token);
+
+if (authError || !user) {
+  return res.status(401).json({
+    error: "Unauthorized",
+  });
+}
+
+const driverId = user.id;
 
       // 💾 insert booking
     const { data, error } = await supabaseAdmin
@@ -91,7 +107,7 @@ if (blockedDates?.length) {
       .insert({
         vehicle_id,
         host_id,
-        driver_id,
+        driver_id: driverId,
         rental_type,
         start_date,
         end_date,

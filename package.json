@@ -16,6 +16,7 @@
     "expo-constants": "~55.0.15",
     "expo-device": "~55.0.15",
     "expo-image-picker": "~55.0.18",
+    "expo-linear-gradient": "~55.0.14",
     "expo-notifications": "~55.0.20",
     "expo-server-sdk": "^6.1.0",
     "express": "^4.19.2",
