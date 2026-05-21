@@ -122,11 +122,29 @@ const driverId = user.id;
       .select("*")
       .single();
 
-    if (error) {
+    
+         if (error) {
       return res.status(400).json({ error: error.message });
     }
 
-    res.json({ ok: true, booking: data });
+    // 💬 create conversation for host/driver messaging
+    const { error: conversationError } = await supabaseAdmin
+      .from("conversations")
+      .upsert(
+        {
+          booking_id: data.id,
+          driver_id: data.driver_id,
+          host_id: data.host_id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "booking_id" }
+      );
+
+    if (conversationError) {
+      console.log("CREATE CONVERSATION ERROR:", conversationError.message);
+    }
+
+        return res.json({ ok: true, booking: data });
   } catch (e) {
     console.log("CREATE BOOKING ERROR:", e);
     res.status(500).json({ error: "Server error" });
