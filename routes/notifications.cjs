@@ -34,8 +34,8 @@ router.post("/insurance-submitted", async (req, res) => {
     if (!hostId) {
       return res.status(400).json({ error: "Missing host_id" });
     }
-
-    await notifyUser({
+console.log("INSURANCE PUSH TARGET HOST:", hostId);
+    const pushResult = await notifyUser({
       supabaseAdmin,
       userId: hostId,
       title: "Insurance Submitted",
@@ -46,6 +46,7 @@ router.post("/insurance-submitted", async (req, res) => {
         driverId: driver_id || null,
       },
     });
+    console.log("INSURANCE PUSH RESULT:", pushResult);
 
     return res.json({
       ok: true,
