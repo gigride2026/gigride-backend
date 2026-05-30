@@ -20,6 +20,7 @@ const pushRoutes = require("./routes/push.cjs");
 const insuranceNotificationsRoutes = require("./routes/insuranceNotifications.cjs");
 const adminAlerts = require("./routes/adminAlerts.cjs");
 const messagesRoutes = require("./routes/messages.cjs");
+const stripeConnectRoutes = require("./routes/stripeConnect.cjs");
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/payments", paymentsRoutes);
 app.use("/api/bookings", bookingsRoutes);
 app.use("/api/vehicles", vehiclesRoutes);
 app.use("/api/payouts", payoutsRoutes);
+app.use("/api/stripe-connect", stripeConnectRoutes);
 app.use(bookingsCancel);
 app.use("/api/deposits", depositsRoutes);
 app.use("/api/bookings", bookingsCreate);
@@ -48,6 +50,7 @@ app.use("/api/push", pushRoutes);
 app.use("/api/notifications", insuranceNotificationsRoutes);
 app.use("/api/admin-alerts", adminAlerts);
 app.use("/api/messages", messagesRoutes);
+
 
 module.exports = app;
 

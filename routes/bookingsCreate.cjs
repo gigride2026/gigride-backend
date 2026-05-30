@@ -2,6 +2,21 @@ const express = require("express");
 const router = express.Router();
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const { getMileageSnapshot } = require("../utils/mileage.cjs");
+function tripDays(startDate, endDate) {
+  if (!startDate || !endDate) return 1;
+
+  const start = new Date(`${startDate}T12:00:00`);
+  const end = new Date(`${endDate}T12:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const diff = Math.ceil((end.getTime() - start.getTime()) / msPerDay);
+
+  return Math.max(1, diff);
+}
 
 router.post("/", async (req, res) => {
   try {
@@ -36,9 +51,19 @@ router.post("/", async (req, res) => {
       unlimitedSelected: unlimited_miles_selected,
     });
 
-    const finalTotal =
-      Number(total_price_cents || 0) +
-      Number(mileage.unlimited_miles_fee_cents || 0);
+    const protectionFeeDailyCents = Number(
+  vehicle.insurance_enabled
+    ? vehicle.insurance_protection_fee_cents || 399
+    : 0
+);
+
+const insuranceTotalCents =
+  protectionFeeDailyCents * tripDays(start_date, end_date);
+
+const finalTotal =
+  Number(total_price_cents || 0) +
+  Number(mileage.unlimited_miles_fee_cents || 0) +
+  insuranceTotalCents;
 
    const { data: bookingConflicts, error: bookingConflictError } = await supabaseAdmin
   .from("bookings")
@@ -112,6 +137,13 @@ const driverId = user.id;
         start_date,
         end_date,
         total_price_cents: finalTotal,
+        insurance_provider: vehicle.insurance_enabled
+  ? vehicle.insurance_provider || "abi"
+  : null,
+
+insurance_protection_fee_cents: protectionFeeDailyCents,
+
+insurance_total_cents: insuranceTotalCents,
         status: "requested",
         metadata: { is_test: true },
         pickup_time,

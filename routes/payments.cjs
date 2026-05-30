@@ -222,8 +222,17 @@ console.log("RENTAL BODY:", req.body);
 
     console.log("🧾 RENTAL BOOKING:", booking);
 
-    const rentalSubtotalCents = Number(booking.rental_subtotal_cents || 0);
-    const driverFeeCents = Number(booking.driver_fee_cents || 0);
+    const rentalSubtotalCents = Number(
+  booking.rental_subtotal_cents || 0
+);
+
+const driverFeeCents = Number(
+  booking.driver_fee_cents || 0
+);
+
+const protectionFeeCents = Number(
+  booking.insurance_total_cents || 0
+);
     console.log("🧾 RENTAL subtotal:", rentalSubtotalCents);
 console.log("🧾 DRIVER fee:", driverFeeCents);
 
@@ -256,7 +265,10 @@ console.log("🧾 DRIVER fee:", driverFeeCents);
     console.log("💰 TAX CALCULATION:", tax);
 
     const totalPriceCents =
-      rentalSubtotalCents + driverFeeCents + tax.totalTaxCents;
+  rentalSubtotalCents +
+  driverFeeCents +
+  protectionFeeCents +
+  tax.totalTaxCents;
 
     const successUrl =
       cleanUrl(req.body?.success_url) ||
@@ -296,6 +308,20 @@ console.log("🧾 DRIVER fee:", driverFeeCents);
               },
             ]
           : []),
+          ...(protectionFeeCents > 0
+  ? [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: protectionFeeCents,
+          product_data: {
+            name: "GigRide Protection Fee",
+          },
+        },
+        quantity: 1,
+      },
+    ]
+  : []),
 
         ...(tax.totalTaxCents > 0
           ? [
