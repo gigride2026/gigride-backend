@@ -7,7 +7,13 @@ const Stripe = require("stripe");
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("Missing STRIPE_SECRET_KEY");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-11-17.clover",
+});
 
 /**
  * POST /api/stripe-connect/onboard-host
@@ -155,4 +161,4 @@ router.get("/status", async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;stripe

@@ -221,6 +221,21 @@ console.log("RENTAL BODY:", req.body);
     }
 
     console.log("🧾 RENTAL BOOKING:", booking);
+    console.log("HOST ID:", booking.host_id);
+console.log("VEHICLE ID:", booking.vehicle_id);
+
+const { data: hostProfile, error: hostProfileError } =
+  await supabaseAdmin
+    .from("profiles")
+    .select("stripe_account_id")
+    .eq("id", booking.host_id)
+    .single();
+
+console.log("HOST STRIPE ACCOUNT:", hostProfile?.stripe_account_id);
+
+if (hostProfileError) {
+  console.log("HOST PROFILE ERROR:", hostProfileError.message);
+}
 
     const rentalSubtotalCents = Number(
   booking.rental_subtotal_cents || 0
