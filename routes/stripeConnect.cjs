@@ -3,17 +3,16 @@ const router = express.Router();
 router.get("/test", (req, res) => {
   res.json({ ok: true, route: "stripe connect working" });
 });
-const Stripe = require("stripe");
-
-const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("Missing STRIPE_SECRET_KEY");
-}
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-11-17.clover",
 });
+
+console.log(
+  "STRIPE MODE:",
+  process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+    ? "LIVE"
+    : "TEST"
+);
 
 /**
  * POST /api/stripe-connect/onboard-host
