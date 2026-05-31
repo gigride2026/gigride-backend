@@ -21,7 +21,7 @@ const insuranceNotificationsRoutes = require("./routes/insuranceNotifications.cj
 const adminAlerts = require("./routes/adminAlerts.cjs");
 const messagesRoutes = require("./routes/messages.cjs");
 const stripeConnectRoutes = require("./routes/stripeConnect.cjs");
-
+const stripeIdentityRoutes = require("./routes/stripeIdentity.cjs");
 const app = express();
 
 app.use(cors());
@@ -50,6 +50,7 @@ app.use("/api/push", pushRoutes);
 app.use("/api/notifications", insuranceNotificationsRoutes);
 app.use("/api/admin-alerts", adminAlerts);
 app.use("/api/messages", messagesRoutes);
+app.use("/api/stripe-identity", stripeIdentityRoutes);
 
 
 module.exports = app;
