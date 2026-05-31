@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const Stripe = require("stripe");
+const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 router.get("/test", (req, res) => {
   res.json({ ok: true, route: "stripe connect working" });
 });
@@ -160,4 +162,4 @@ router.get("/status", async (req, res) => {
   }
 });
 
-module.exports = router;stripe
+module.exports = router;
