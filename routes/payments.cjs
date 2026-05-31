@@ -221,21 +221,24 @@ console.log("RENTAL BODY:", req.body);
     }
 
     console.log("🧾 RENTAL BOOKING:", booking);
-    console.log("HOST ID:", booking.host_id);
-console.log("VEHICLE ID:", booking.vehicle_id);
-
-const { data: hostProfile, error: hostProfileError } =
+    const { data: hostProfile, error: hostProfileError } =
   await supabaseAdmin
     .from("profiles")
     .select("stripe_account_id")
     .eq("id", booking.host_id)
-    .single();
-
-console.log("HOST STRIPE ACCOUNT:", hostProfile?.stripe_account_id);
+    .maybeSingle();
 
 if (hostProfileError) {
-  console.log("HOST PROFILE ERROR:", hostProfileError.message);
+  return res.status(500).json({ error: hostProfileError.message });
 }
+
+if (!hostProfile?.stripe_account_id) {
+  return res.status(400).json({
+    error: "Host has not completed Stripe payout setup.",
+  });
+}
+    console.log("HOST ID:", booking.host_id);
+console.log("VEHICLE ID:", booking.vehicle_id);
 
     const rentalSubtotalCents = Number(
   booking.rental_subtotal_cents || 0
@@ -284,6 +287,12 @@ console.log("🧾 DRIVER fee:", driverFeeCents);
   driverFeeCents +
   protectionFeeCents +
   tax.totalTaxCents;
+  const platformFeeCents = Math.round(rentalSubtotalCents * 0.08);
+const hostPayoutCents = rentalSubtotalCents - platformFeeCents;
+
+// Stripe transfers total minus application fee to the host.
+// This keeps taxes/protection/driver fees + GigRide's 8% with GigRide.
+const applicationFeeAmountCents = totalPriceCents - hostPayoutCents;
 
     const successUrl =
       cleanUrl(req.body?.success_url) ||
@@ -301,6 +310,12 @@ console.log("🧾 DRIVER fee:", driverFeeCents);
       const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
+      payment_intent_data: {
+  application_fee_amount: applicationFeeAmountCents,
+  transfer_data: {
+    destination: hostProfile.stripe_account_id,
+  },
+},
       line_items: [
         {
           price_data: {
