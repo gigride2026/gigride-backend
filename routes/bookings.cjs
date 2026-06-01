@@ -336,7 +336,7 @@ router.post("/:id/start", async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabaseAdmin
       .from("bookings")
-      .select("id, status, host_id, driver_id, pickup_photos, start_odometer")
+      .select("id, status, host_id, driver_id, pickup_photos,host_pickup_photos,driver_pickup_photos,start_odometer")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -380,12 +380,6 @@ console.log("START TRIP DEBUG", {
 if (hostPickupPhotos.length < 9 || driverPickupPhotos.length < 9) {
   return res.status(400).json({
     error: "Both host and driver pickup photos are required before starting trip",
-  });
-}
-if (hostPickupPhotos.length < 9 || driverPickupPhotos.length < 9) {
-  return res.status(400).json({
-    error:
-      "Both host and driver pickup photos are required before starting trip",
   });
 }
 
