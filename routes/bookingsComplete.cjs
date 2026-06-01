@@ -66,12 +66,31 @@ function calculateLateFeeCents({
   };
 }
 
+function normalizePhotoArray(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch (_) {
+      return value.trim() ? [value.trim()] : [];
+    }
+  }
+
+  return [];
+}
+
 router.post("/:id/complete", async (req, res) => {
   try {
     const bookingId = req.params.id;
     const { end_odometer } = req.body;
 
-    if (!end_odometer) {
+    console.log(`🔥🔥🔥 NEW COMPLETE ROUTE HIT: ${bookingId}`);
+
+    const endOdometerNum = Number(end_odometer);
+
+    if (!Number.isFinite(endOdometerNum) || endOdometerNum < 0) {
       return res.status(400).json({ error: "end_odometer required" });
     }
 
@@ -84,43 +103,36 @@ router.post("/:id/complete", async (req, res) => {
     if (bookingErr || !booking) {
       return res.status(404).json({ error: "Booking not found" });
     }
-const hostReturnPhotos = Array.isArray(booking.host_return_photos)
-  ? booking.host_return_photos
-  : [];
 
-const driverReturnPhotos = Array.isArray(booking.driver_return_photos)
-  ? booking.driver_return_photos
-  : [];
+    const hostReturnPhotos = normalizePhotoArray(booking.host_return_photos);
+    const driverReturnPhotos = normalizePhotoArray(booking.driver_return_photos);
 
-if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
-  return res.status(400).json({
-    error: "Both host and driver return photos are required before completing trip",
-    debug: {
-      hostReturnCount: hostReturnPhotos.length,
-      driverReturnCount: driverReturnPhotos.length,
-    },
-  });
-}
+    console.log(
+      `COMPLETE PHOTO COUNTS booking=${bookingId} host=${hostReturnPhotos.length} driver=${driverReturnPhotos.length}`
+    );
 
-console.log("COMPLETE RETURN PHOTO DEBUG:", {
-  bookingId,
-  hostReturnCount: hostReturnPhotos.length,
-  driverReturnCount: driverReturnPhotos.length,
-  hostReturnRaw: booking.host_return_photos,
-  driverReturnRaw: booking.driver_return_photos,
-});
+    if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
+      return res.status(400).json({
+        error: `Return photos missing. Host ${hostReturnPhotos.length}/9, Driver ${driverReturnPhotos.length}/9`,
+      });
+    }
+
+    if (booking.status !== "active") {
+      return res.status(400).json({
+        error: `Booking must be active before completing trip. Current status: ${booking.status}`,
+      });
+    }
+
     const mileage = calculateMileageCharge({
       ...booking,
-      end_odometer: Number(end_odometer),
+      end_odometer: endOdometerNum,
     });
 
     const dailyRateCents =
       Number(booking?.vehicles?.daily_rate_cents || 0) ||
       Math.round(Number(booking?.vehicles?.daily_price || 0) * 100);
 
-    const completedAt = new Date(
-  Date.now() + 1000 * 60 * 60 * 30
-).toISOString();
+    const completedAt = new Date().toISOString();
 
     const late = calculateLateFeeCents({
       endDate: booking.end_date,
@@ -129,21 +141,21 @@ console.log("COMPLETE RETURN PHOTO DEBUG:", {
       dailyRateCents,
     });
 
-    console.log("🧾 LATE FEE DEBUG:", {
-  bookingId,
-  end_date: booking.end_date,
-  dropoff_time: booking.dropoff_time,
-  completedAt,
-  dailyRateCents,
-  late,
-});
+    console.log("LATE FEE DEBUG:", {
+      bookingId,
+      end_date: booking.end_date,
+      dropoff_time: booking.dropoff_time,
+      completedAt,
+      dailyRateCents,
+      late,
+    });
 
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from("bookings")
       .update({
         status: "completed",
         completed_at: completedAt,
-        end_odometer: Number(end_odometer),
+        end_odometer: endOdometerNum,
         total_miles_driven: mileage.total_miles_driven,
         mileage_overage_miles: mileage.mileage_overage_miles,
         mileage_overage_cents: mileage.mileage_overage_cents,
@@ -159,7 +171,7 @@ console.log("COMPLETE RETURN PHOTO DEBUG:", {
       return res.status(400).json({ error: updateErr.message });
     }
 
-    res.json({
+    return res.json({
       ok: true,
       booking: updated,
       mileage,
@@ -167,7 +179,7 @@ console.log("COMPLETE RETURN PHOTO DEBUG:", {
     });
   } catch (e) {
     console.log("COMPLETE TRIP ERROR:", e);
-    res.status(500).json({ error: e?.message || "Server error" });
+    return res.status(500).json({ error: e?.message || "Server error" });
   }
 });
 
