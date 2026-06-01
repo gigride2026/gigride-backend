@@ -101,6 +101,14 @@ if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
     },
   });
 }
+
+console.log("COMPLETE RETURN PHOTO DEBUG:", {
+  bookingId,
+  hostReturnCount: hostReturnPhotos.length,
+  driverReturnCount: driverReturnPhotos.length,
+  hostReturnRaw: booking.host_return_photos,
+  driverReturnRaw: booking.driver_return_photos,
+});
     const mileage = calculateMileageCharge({
       ...booking,
       end_odometer: Number(end_odometer),
