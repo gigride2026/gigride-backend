@@ -246,10 +246,18 @@ router.post("/:id/confirm-pickup", async (req, res) => {
     const bookingId = req.params.id;
 
     const { data: booking, error: bookingError } = await supabaseAdmin
-      .from("bookings")
-      .select("id,status,host_id,driver_id")
-      .eq("id", bookingId)
-      .maybeSingle();
+  .from("bookings")
+  .select(`
+    id,
+    status,
+    host_id,
+    driver_id,
+    host_pickup_photos,
+    driver_pickup_photos,
+    start_odometer
+  `)
+  .eq("id", bookingId)
+  .maybeSingle();
 
     if (bookingError || !booking) {
       return res.status(404).json({ error: "Booking not found" });
@@ -346,15 +354,26 @@ router.post("/:id/start", async (req, res) => {
       });
     }
 
-    const pickupPhotos = Array.isArray(booking.pickup_photos)
-      ? booking.pickup_photos
-      : [];
+    const hostPickupPhotos = Array.isArray(booking.host_pickup_photos)
+  ? booking.host_pickup_photos
+  : [];
 
-    if (pickupPhotos.length === 0) {
-      return res.status(400).json({
-        error: "Pickup photos are required before starting trip",
-      });
-    }
+const driverPickupPhotos = Array.isArray(booking.driver_pickup_photos)
+  ? booking.driver_pickup_photos
+  : [];
+console.log("START TRIP PHOTO DEBUG:", {
+  bookingId,
+  hostPickupCount: hostPickupPhotos.length,
+  driverPickupCount: driverPickupPhotos.length,
+  hostPickupRaw: booking.host_pickup_photos,
+  driverPickupRaw: booking.driver_pickup_photos,
+});
+if (hostPickupPhotos.length < 9 || driverPickupPhotos.length < 9) {
+  return res.status(400).json({
+    error:
+      "Both host and driver pickup photos are required before starting trip",
+  });
+}
 
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from("bookings")
