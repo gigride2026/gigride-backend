@@ -550,12 +550,8 @@ if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
 
     const mileageOverageCents = mileageOverageMiles * overageRateCents;
 
-    // force future completion time for late fee testing
-   const totalExtraFeesCents =
-      Number(booking.damage_fee_cents || 0) +
-      Number(booking.cleaning_fee_cents || 0) +
-      Number(booking.smoking_fee_cents || 0) +
-      Number(booking.other_fee_cents || 0);
+    
+   
 
     const depositAmountCents = Number(booking.deposit_amount_cents || 0);
     const depositRefundAmountCents = Math.max(
@@ -591,7 +587,13 @@ const late = calculateLateFeeCents({
   completedAt,
   dailyRateCents,
 });
-
+const totalExtraFeesCents =
+  Number(booking.damage_fee_cents || 0) +
+  Number(booking.cleaning_fee_cents || 0) +
+  Number(booking.smoking_fee_cents || 0) +
+  Number(booking.other_fee_cents || 0) +
+  Number(mileageOverageCents || 0) +
+  Number(late.late_fee_cents || 0);
 console.log("🧾 LATE FEE DEBUG:", {
   bookingId,
   end_date: booking.end_date,
