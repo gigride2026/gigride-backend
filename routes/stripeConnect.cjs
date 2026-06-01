@@ -85,8 +85,8 @@ router.post("/onboard-host", async (req, res) => {
 
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
-      refresh_url: `${baseUrl}/stripe/refresh`,
-      return_url: `${baseUrl}/stripe/return`,
+      refresh_url: `${baseUrl}/connect-complete`,
+      return_url: `${baseUrl}/connect-complete`,
       type: "account_onboarding",
     });
 
