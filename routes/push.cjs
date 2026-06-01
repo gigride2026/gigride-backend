@@ -110,5 +110,32 @@ router.post("/booking-requested", async (req, res) => {
     });
   }
 });
+router.post("/host-approved", async (req, res) => {
+  try {
+    const user = await getUserFromReq(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
 
+    const { hostId } = req.body || {};
+
+    if (!hostId) {
+      return res.status(400).json({ error: "Missing hostId" });
+    }
+
+    await notifyUser({
+      supabaseAdmin,
+      userId: hostId,
+      title: "🎉 Host Approved",
+      body: "Your GigRide host application was approved. You can now switch to Host Mode and start listing vehicles.",
+      data: {
+        type: "host_approved",
+        hostId,
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("host-approved push error:", e);
+    return res.status(500).json({ error: e.message || "Server error" });
+  }
+});
 module.exports = router;
