@@ -84,7 +84,23 @@ router.post("/:id/complete", async (req, res) => {
     if (bookingErr || !booking) {
       return res.status(404).json({ error: "Booking not found" });
     }
+const hostReturnPhotos = Array.isArray(booking.host_return_photos)
+  ? booking.host_return_photos
+  : [];
 
+const driverReturnPhotos = Array.isArray(booking.driver_return_photos)
+  ? booking.driver_return_photos
+  : [];
+
+if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
+  return res.status(400).json({
+    error: "Both host and driver return photos are required before completing trip",
+    debug: {
+      hostReturnCount: hostReturnPhotos.length,
+      driverReturnCount: driverReturnPhotos.length,
+    },
+  });
+}
     const mileage = calculateMileageCharge({
       ...booking,
       end_odometer: Number(end_odometer),
