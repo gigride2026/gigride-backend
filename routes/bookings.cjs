@@ -453,9 +453,29 @@ router.post("/:id/complete", async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabaseAdmin
       .from("bookings")
-      .select(
-  "id, status, host_id, driver_id, vehicle_id, start_date, end_date, included_miles, unlimited_miles_selected, overage_rate_cents, start_odometer, return_photos, damage_fee_cents, cleaning_fee_cents, smoking_fee_cents, other_fee_cents, deposit_amount_cents, total_price_cents, dropoff_time, vehicles:vehicle_id(*)"
-)
+     .select(`
+  id,
+  status,
+  host_id,
+  driver_id,
+  vehicle_id,
+  start_date,
+  end_date,
+  included_miles,
+  unlimited_miles_selected,
+  overage_rate_cents,
+  start_odometer,
+  host_return_photos,
+  driver_return_photos,
+  damage_fee_cents,
+  cleaning_fee_cents,
+  smoking_fee_cents,
+  other_fee_cents,
+  deposit_amount_cents,
+  total_price_cents,
+  dropoff_time,
+  vehicles:vehicle_id(*)
+`)
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -473,15 +493,19 @@ router.post("/:id/complete", async (req, res) => {
       });
     }
 
-    const returnPhotos = Array.isArray(booking.return_photos)
-      ? booking.return_photos
-      : [];
+    const hostReturnPhotos = Array.isArray(booking.host_return_photos)
+  ? booking.host_return_photos
+  : [];
 
-    if (returnPhotos.length === 0) {
-      return res.status(400).json({
-        error: "Return photos are required before completing trip",
-      });
-    }
+const driverReturnPhotos = Array.isArray(booking.driver_return_photos)
+  ? booking.driver_return_photos
+  : [];
+
+if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
+  return res.status(400).json({
+    error: `Return photos missing. Host ${hostReturnPhotos.length}/9, Driver ${driverReturnPhotos.length}/9`,
+  });
+}
 
     const startOdometer = Number(booking.start_odometer || 0);
 
@@ -595,7 +619,7 @@ late_fee_label: late.late_label,
       })
       .eq("id", bookingId)
 .select(
-  "id, status, start_odometer, end_odometer, total_miles_driven, mileage_overage_miles, mileage_overage_cents, deposit_hold_until, deposit_refund_amount_cents, dispute_status"
+  "id, status, start_odometer, end_odometer, total_miles_driven, mileage_overage_miles, mileage_overage_cents, deposit_hold_until, deposit_refund_amount_cents, host_return_photos, driver_return_photos, dispute_status"
 )
 .maybeSingle();
 
