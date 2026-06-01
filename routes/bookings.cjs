@@ -368,6 +368,20 @@ console.log("START TRIP PHOTO DEBUG:", {
   hostPickupRaw: booking.host_pickup_photos,
   driverPickupRaw: booking.driver_pickup_photos,
 });
+
+console.log("START TRIP DEBUG", {
+  bookingId,
+  hostPickupPhotos,
+  driverPickupPhotos,
+  hostCount: hostPickupPhotos.length,
+  driverCount: driverPickupPhotos.length,
+});
+
+if (hostPickupPhotos.length < 9 || driverPickupPhotos.length < 9) {
+  return res.status(400).json({
+    error: "Both host and driver pickup photos are required before starting trip",
+  });
+}
 if (hostPickupPhotos.length < 9 || driverPickupPhotos.length < 9) {
   return res.status(400).json({
     error:
