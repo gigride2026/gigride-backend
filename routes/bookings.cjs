@@ -552,15 +552,7 @@ if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
 
    
 
-    const rentalGrossCents = Number(booking.total_price_cents || 0);
-const applicationFeeCents = Math.round(rentalGrossCents * 0.08);
-
-const grossAmountCents = rentalGrossCents + totalExtraFeesCents;
-
-const netAmountCents = Math.max(
-  rentalGrossCents - applicationFeeCents + totalExtraFeesCents,
-  0
-);
+    
     const dailyRateCents =
   Number(booking?.vehicles?.daily_rate_cents || 0) ||
   Math.round(Number(booking?.vehicles?.daily_price || 0) * 100) ||
@@ -593,6 +585,15 @@ const totalExtraFeesCents =
   const depositAmountCents = Number(booking.deposit_amount_cents || 0);
 const depositRefundAmountCents = Math.max(
   depositAmountCents - totalExtraFeesCents,
+  0
+);
+const rentalGrossCents = Number(booking.total_price_cents || 0);
+const applicationFeeCents = Math.round(rentalGrossCents * 0.08);
+
+const grossAmountCents = rentalGrossCents + totalExtraFeesCents;
+
+const netAmountCents = Math.max(
+  rentalGrossCents - applicationFeeCents + totalExtraFeesCents,
   0
 );
 console.log("🧾 LATE FEE DEBUG:", {
