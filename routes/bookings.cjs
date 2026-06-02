@@ -550,17 +550,17 @@ if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
 
     const mileageOverageCents = mileageOverageMiles * overageRateCents;
 
-    
    
 
-   
+    const rentalGrossCents = Number(booking.total_price_cents || 0);
+const applicationFeeCents = Math.round(rentalGrossCents * 0.08);
 
-    const grossAmountCents = Number(booking.total_price_cents || 0);
-    const applicationFeeCents = Math.round(grossAmountCents * 0.08);
-    const netAmountCents = Math.max(
-      grossAmountCents - applicationFeeCents,
-      0
-    );
+const grossAmountCents = rentalGrossCents + totalExtraFeesCents;
+
+const netAmountCents = Math.max(
+  rentalGrossCents - applicationFeeCents + totalExtraFeesCents,
+  0
+);
     const dailyRateCents =
   Number(booking?.vehicles?.daily_rate_cents || 0) ||
   Math.round(Number(booking?.vehicles?.daily_price || 0) * 100) ||
@@ -672,27 +672,50 @@ late_fee_label: late.late_label,
       return res.status(500).json({ error: existingPayoutError.message });
     }
 
-    if (!existingPayout) {
-      const { error: payoutInsertError } = await supabaseAdmin
-        .from("host_payouts")
-        .insert({
-          host_id: booking.host_id,
-          vehicle_id: booking.vehicle_id,
-          booking_id: bookingId,
-          gross_amount_cents: grossAmountCents,
-          application_fee_cents: applicationFeeCents,
-          net_amount_cents: netAmountCents,
-          status: "pending",
-          payout_available_at: payoutAvailableAt,
-          period_start: completedAt,
-          period_end: completedAt,
-        });
+    if (existingPayout) {
+  const { error: payoutUpdateError } = await supabaseAdmin
+    .from("host_payouts")
+    .update({
+      gross_amount_cents: grossAmountCents,
+      application_fee_cents: applicationFeeCents,
+      net_amount_cents: netAmountCents,
+      rental_subtotal_cents: rentalGrossCents,
+      host_fee_cents: applicationFeeCents,
+      host_payout_cents: netAmountCents,
+      payout_available_at: payoutAvailableAt,
+      period_start: completedAt,
+      period_end: completedAt,
+    })
+    .eq("booking_id", bookingId);
 
-      if (payoutInsertError) {
-        console.error("❌ payout insert failed:", payoutInsertError);
-        return res.status(500).json({ error: payoutInsertError.message });
-      }
-    }
+  if (payoutUpdateError) {
+    console.error("❌ payout update failed:", payoutUpdateError);
+    return res.status(500).json({ error: payoutUpdateError.message });
+  }
+} else {
+  const { error: payoutInsertError } = await supabaseAdmin
+    .from("host_payouts")
+    .insert({
+      host_id: booking.host_id,
+      vehicle_id: booking.vehicle_id,
+      booking_id: bookingId,
+      gross_amount_cents: grossAmountCents,
+      application_fee_cents: applicationFeeCents,
+      net_amount_cents: netAmountCents,
+      rental_subtotal_cents: rentalGrossCents,
+      host_fee_cents: applicationFeeCents,
+      host_payout_cents: netAmountCents,
+      status: "pending",
+      payout_available_at: payoutAvailableAt,
+      period_start: completedAt,
+      period_end: completedAt,
+    });
+
+  if (payoutInsertError) {
+    console.error("❌ payout insert failed:", payoutInsertError);
+    return res.status(500).json({ error: payoutInsertError.message });
+  }
+}
 
     return res.json({
       ok: true,
