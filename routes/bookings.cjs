@@ -553,11 +553,7 @@ if (hostReturnPhotos.length < 9 || driverReturnPhotos.length < 9) {
     
    
 
-    const depositAmountCents = Number(booking.deposit_amount_cents || 0);
-    const depositRefundAmountCents = Math.max(
-      depositAmountCents - totalExtraFeesCents,
-      0
-    );
+   
 
     const grossAmountCents = Number(booking.total_price_cents || 0);
     const applicationFeeCents = Math.round(grossAmountCents * 0.08);
@@ -594,6 +590,11 @@ const totalExtraFeesCents =
   Number(booking.other_fee_cents || 0) +
   Number(mileageOverageCents || 0) +
   Number(late.late_fee_cents || 0);
+  const depositAmountCents = Number(booking.deposit_amount_cents || 0);
+const depositRefundAmountCents = Math.max(
+  depositAmountCents - totalExtraFeesCents,
+  0
+);
 console.log("🧾 LATE FEE DEBUG:", {
   bookingId,
   end_date: booking.end_date,
