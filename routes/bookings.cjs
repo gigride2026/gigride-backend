@@ -683,8 +683,8 @@ late_fee_label: late.late_label,
       host_fee_cents: applicationFeeCents,
       host_payout_cents: netAmountCents,
       payout_available_at: payoutAvailableAt,
-      period_start: completedAt,
-      period_end: completedAt,
+      period_start: booking.start_date || completedAt,
+period_end: booking.end_date || completedAt,
     })
     .eq("booking_id", bookingId);
 
@@ -707,8 +707,8 @@ late_fee_label: late.late_label,
       host_payout_cents: netAmountCents,
       status: "pending",
       payout_available_at: payoutAvailableAt,
-      period_start: completedAt,
-      period_end: completedAt,
+      period_start: booking.start_date || completedAt,
+period_end: booking.end_date || completedAt,
     });
 
   if (payoutInsertError) {
