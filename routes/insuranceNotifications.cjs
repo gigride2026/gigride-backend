@@ -112,7 +112,7 @@ if (!hostPushTokens || hostPushTokens.length === 0) {
   await sendExpoPushMessage(
     row.expo_push_token,
       "Insurance Submitted",
-      `A driver submitted insurance for ${vehicleTitle}. Review it before deposit unlock.`,
+      `A driver submitted insurance for your ${vehicleTitle}. Review it before deposit unlock.`,
       {
         type: "insurance_submitted",
         booking_id,

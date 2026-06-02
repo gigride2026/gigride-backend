@@ -93,7 +93,8 @@ router.post("/booking-requested", async (req, res) => {
       supabaseAdmin,
       userId: booking.host_id,
       title: "New Booking Request",
-      body: `Someone requested ${vehicleTitle}. Review it now.`,
+      body: `🔔 New Booking Request
+A driver requested your ${vehicleTitle}. Review it now.`,
       data: {
         type: "booking_requested",
         booking_id,
