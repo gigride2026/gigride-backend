@@ -588,12 +588,11 @@ const depositRefundAmountCents = Math.max(
   0
 );
 const rentalGrossCents = Number(booking.total_price_cents || 0);
-const applicationFeeCents = Math.round(rentalGrossCents * 0.08);
-
 const grossAmountCents = rentalGrossCents + totalExtraFeesCents;
+const applicationFeeCents = Math.round(grossAmountCents * 0.08);
 
 const netAmountCents = Math.max(
-  rentalGrossCents - applicationFeeCents + totalExtraFeesCents,
+  grossAmountCents - applicationFeeCents,
   0
 );
 console.log("🧾 LATE FEE DEBUG:", {
