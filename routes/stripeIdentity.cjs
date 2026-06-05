@@ -28,15 +28,19 @@ router.post("/create-session", async (req, res) => {
     }
 
     const verificationSession =
-      await stripe.identity.verificationSessions.create({
-        type: "document",
-        metadata: {
-          user_id: user.id,
-          email: user.email || "",
-          platform: "gigride",
-        },
-        return_url: "https://gigride.app/identity-complete",
-      });
+  await stripe.identity.verificationSessions.create({
+    type: "document",
+    options: {
+      document: {
+        require_matching_selfie: true,
+      },
+    },
+    metadata: {
+      user_id: user.id,
+      email: user.email || "",
+    },
+    return_url: "https://gigride.app/identity-complete",
+  });
 
     await supabaseAdmin
       .from("profiles")

@@ -51,6 +51,17 @@ router.post(
       })
       .eq("id", userId);
 
+    await notifyUser({
+      supabaseAdmin,
+      userId,
+      title: "Identity verified ✅",
+      body: "Your GigRide identity verification is complete.",
+      data: {
+        type: "identity_verified",
+        user_id: userId,
+      },
+    });
+
     await notifyAdmin({
       supabaseAdmin,
       title: "Identity verification completed 🪪",
@@ -61,7 +72,7 @@ router.post(
       },
     });
 
-    console.log("✅ Admin identity verification push sent:", userId);
+    console.log("✅ Identity verification pushes sent:", userId);
   }
 }
 
