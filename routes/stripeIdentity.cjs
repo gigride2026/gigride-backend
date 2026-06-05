@@ -39,7 +39,7 @@ router.post("/create-session", async (req, res) => {
       user_id: user.id,
       email: user.email || "",
     },
-    return_url: "https://gigride.app/identity-complete",
+    return_url: "gigride://identity-complete",
   });
 
     await supabaseAdmin

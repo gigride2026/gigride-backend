@@ -305,10 +305,22 @@ console.log("✅ RENTAL HOST ID:", updatedBooking?.host_id);
             .select();
 
           if (payoutError) {
-            console.error("❌ Host payout creation failed:", payoutError);
-          } else {
-            console.log("✅ Host payout created:", payoutData);
-          }
+  console.error("❌ Host payout creation failed:", payoutError);
+} else {
+  console.log("✅ Host payout created:", payoutData);
+
+  await notifyAdmin({
+    supabaseAdmin,
+    title: "GigRide platform fee collected 💼",
+    body: `Platform fee collected for booking ${bookingId}.`,
+    data: {
+      type: "platform_fee_collected",
+      bookingId,
+    },
+  });
+
+  console.log("✅ PLATFORM FEE ADMIN PUSH SENT");
+}
         }
       }
 
