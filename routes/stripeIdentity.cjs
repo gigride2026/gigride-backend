@@ -45,15 +45,6 @@ router.post("/create-session", async (req, res) => {
         identity_submitted_at: new Date().toISOString(),
       })
       .eq("id", user.id);
-      await notifyAdmin({
-  supabaseAdmin,
-  title: "Identity verification submitted 🪪",
-  body: `${user.email || "A user"} submitted identity verification.`,
-  data: {
-    type: "identity_submitted",
-    user_id: user.id,
-  },
-});
 
     return res.json({
       ok: true,
