@@ -9,6 +9,7 @@ const router = express.Router();
 
 const stripe = require("../utils/stripeClient.cjs");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const { notifyAdmin } = require("../utils/pushNotifications.cjs");
 
 /**
  * Stripe webhook MUST receive RAW body.
@@ -69,7 +70,10 @@ router.post(
           session?.metadata?.booking_id ||
           null;
 
-        const kind = session?.metadata?.kind || null;
+        const kind =
+  session?.metadata?.kind ||
+  session?.metadata?.payment_type ||
+  null;
 
         console.log("🧾 checkout.session.completed:", {
           bookingId,
@@ -100,7 +104,29 @@ router.post(
           }
 
           console.log("✅ Booking deposit marked paid:", upd);
+          await notifyAdmin({
+  supabaseAdmin,
+  title: "Deposit paid 💳",
+  body: `A GigRide deposit was paid for booking ${bookingId}.`,
+  data: {
+    type: "admin_deposit_paid",
+    bookingId,
+  },
+});
         }
+        if (kind === "rental" && bookingId) {
+  await notifyAdmin({
+    supabaseAdmin,
+    title: "Rental payment received 💰",
+    body: `Rental payment received for booking ${bookingId}.`,
+    data: {
+      type: "admin_rental_paid",
+      bookingId,
+    },
+  });
+
+  console.log("✅ Admin rental payment notification sent");
+}
       }
 
       // ---- Record event for idempotency (best-effort) ----

@@ -48,9 +48,9 @@ async function notifyUser({ supabaseAdmin, userId, title, body, data = {} }) {
   const cleanUserId = String(userId).trim();
 
   const { data: tokens, error } = await supabaseAdmin
-    .from("user_push_tokens")
-    .select("id, user_id, expo_push_token, platform, updated_at")
-    .eq("user_id", cleanUserId);
+   .from("profiles")
+.select("id, expo_push_token")
+.eq("id", cleanUserId);
 
   console.log("Push token lookup userId:", cleanUserId);
   console.log("Push token lookup error:", error);
