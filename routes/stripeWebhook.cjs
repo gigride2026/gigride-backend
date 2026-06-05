@@ -3,10 +3,11 @@ console.log("🪝 stripeWebhook loaded:", __filename);
 
 const express = require("express");
 const router = express.Router();
-const { notifyUser } = require("../utils/pushNotifications.cjs");
+const { notifyUser, notifyAdmin } = require("../utils/pushNotifications.cjs");
 
 const stripe = require("../utils/stripeClient.cjs");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+
 
 // IMPORTANT: Stripe needs the raw body to verify signature
 router.post(
@@ -36,6 +37,33 @@ router.post(
       }
 
       console.log("✅ Webhook verified:", event.type);
+      if (event.type === "identity.verification_session.verified") {
+  const session = event.data.object;
+  const userId = session?.metadata?.user_id;
+  const email = session?.metadata?.email;
+
+  if (userId) {
+    await supabaseAdmin
+      .from("profiles")
+      .update({
+        identity_status: "verified",
+        identity_verified_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    await notifyAdmin({
+      supabaseAdmin,
+      title: "Identity verification completed 🪪",
+      body: `${email || "A user"} completed identity verification.`,
+      data: {
+        type: "identity_verified",
+        user_id: userId,
+      },
+    });
+
+    console.log("✅ Admin identity verification push sent:", userId);
+  }
+}
 
       
   if (event.type === "checkout.session.completed") {
