@@ -77,8 +77,17 @@ async function notifyUser({ supabaseAdmin, userId, title, body, data = {} }) {
     });
   }
 }
-
+async function notifyAdmin({ supabaseAdmin, title, body, data = {} }) {
+  await notifyUser({
+    supabaseAdmin,
+    userId: "c513215e-2488-44b6-8a2e-01e04d40168a",
+    title,
+    body,
+    data,
+  });
+}
 module.exports = {
   sendExpoPushNotification,
   notifyUser,
+  notifyAdmin,
 };

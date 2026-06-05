@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
+    "base64-arraybuffer": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "expo": "^55.0.11",
