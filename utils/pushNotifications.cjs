@@ -80,7 +80,7 @@ async function notifyUser({ supabaseAdmin, userId, title, body, data = {} }) {
 async function notifyAdmin({ supabaseAdmin, title, body, data = {} }) {
   await notifyUser({
     supabaseAdmin,
-    userId: "c513215e-2488-44b6-8a2e-01e04d40168a",
+    userId: "7e4696e3-e767-4f6c-887d-052b2c0ed588",
     title,
     body,
     data,
