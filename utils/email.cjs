@@ -10,7 +10,13 @@ async function sendWelcomeEmail({ to }) {
     to,
     subject: "Welcome to GigRide 🚗",
     html: `
-<div style="background:#05050A;padding:40px;font-family:Arial,sans-serif;color:white;">
+<div style="
+  background:#05050A;
+  padding:40px;
+  font-family:Arial,sans-serif;
+  color:white;
+  text-align:center;
+">
   
   <div style="text-align:center;margin-bottom:30px;">
     <img
@@ -21,9 +27,11 @@ async function sendWelcomeEmail({ to }) {
 />
   </div>
 
-  <h1 style="color:white;text-align:center;">
-  Welcome to GigRide 🚗
-</h1>
+ <hr style="margin:30px 0;border:none;border-top:1px solid #333;" />
+
+<p style="color:#9CA3AF;font-size:13px;">
+Questions? Contact support@gigride.app
+</p>
 
   <p>Your account has been created.</p>
 
@@ -33,7 +41,7 @@ async function sendWelcomeEmail({ to }) {
   </p>
 
   <a
-    href="https://gigride.app"
+  href="gigride:///identity-verification"
     style="
       display:inline-block;
       padding:14px 24px;
@@ -45,7 +53,7 @@ async function sendWelcomeEmail({ to }) {
       margin-top:12px;
     "
   >
-    Open GigRide
+    Complete Verification
   </a>
 
   <p style="margin-top:30px;color:#9CA3AF;">
