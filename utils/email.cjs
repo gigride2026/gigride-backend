@@ -12,11 +12,21 @@ async function sendWelcomeEmail({ to }) {
     html: `
 <div style="
   background:#05050A;
-  padding:40px;
+  padding:32px 20px;
   font-family:Arial,sans-serif;
   color:white;
   text-align:center;
+  width:100%;
+  min-height:100vh;
 ">
+
+  <div style="
+    max-width:560px;
+    margin:0 auto;
+    background-color:#0B0B12;
+    border-radius:28px;
+    padding:34px 24px;
+  ">
   
   <div style="text-align:center;margin-bottom:30px;">
     <img
@@ -35,36 +45,35 @@ Questions? Contact support@gigride.app
 
   <p>Your account has been created.</p>
 
-  <p>
-    Next step: complete identity verification so you can safely
-    book vehicles built for gig work.
-  </p>
+ <p>
+  Next step: complete identity verification so you can safely
+  book vehicles built for gig work.
+</p>
 
-  <a
-  href="gigride:///identity-verification"
-    style="
-      display:inline-block;
-      padding:14px 24px;
-      border-radius:12px;
-      background:#8B5CF6;
-      color:white;
-      text-decoration:none;
-      font-weight:700;
-      margin-top:12px;
-    "
-  >
-    Complete Verification
-  </a>
+<p style="color:#D1D5DB;font-size:14px;line-height:22px;">
+  Open the GigRide app and tap
+  <strong>Complete Verification</strong>
+  from your profile to finish onboarding.
+</p>
+
+<p>
+  Your GigRide account has been created.
+</p>
+
+<p>
+  Open the GigRide app to finish setting up your profile, complete any required verification, and start using the platform.
+</p>
 
   <p style="margin-top:30px;color:#9CA3AF;">
     Thanks for joining early — we're excited to have you.
   </p>
 
-  <p style="margin-top:20px;">
-    <strong>GigRide</strong><br/>
-    support@gigride.app
-  </p>
+  <p>
+  <strong>GigRide</strong><br/>
+  support@gigride.app
+</p>
 
+  </div>
 </div>
 `
   });
