@@ -1,10 +1,11 @@
 // routes/auth.cjs
 const express = require("express");
 const { createClient } = require("@supabase/supabase-js");
+const { sendWelcomeEmail } = require("../utils/email.cjs");
 const { notifyAdmin } = require("../utils/pushNotifications.cjs");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
-
 const router = express.Router();
+
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -52,7 +53,12 @@ router.post("/admin-signup-alert", async (req, res) => {
         role,
       },
     });
-
+try {
+  await sendWelcomeEmail({ to: email });
+  console.log("✅ Welcome email sent:", email);
+} catch (emailErr) {
+  console.error("❌ Welcome email failed:", emailErr.message);
+}
     return res.json({ ok: true });
   } catch (e) {
     console.error("admin-signup-alert error:", e);
