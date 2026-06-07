@@ -285,8 +285,7 @@ console.log("🧾 DRIVER fee:", driverFeeCents);
     const totalPriceCents =
   rentalSubtotalCents +
   driverFeeCents +
-  protectionFeeCents +
-  tax.totalTaxCents;
+  protectionFeeCents;
   const platformFeeCents = Math.round(rentalSubtotalCents * 0.08);
 const hostPayoutCents = rentalSubtotalCents - platformFeeCents;
 
@@ -310,6 +309,11 @@ const applicationFeeAmountCents = totalPriceCents - hostPayoutCents;
       const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
+      automatic_tax: { enabled: true },
+billing_address_collection: "required",
+customer_update: {
+  address: "auto",
+},
       payment_intent_data: {
   application_fee_amount: applicationFeeAmountCents,
   transfer_data: {
@@ -353,20 +357,6 @@ const applicationFeeAmountCents = totalPriceCents - hostPayoutCents;
     ]
   : []),
 
-        ...(tax.totalTaxCents > 0
-          ? [
-              {
-                price_data: {
-                  currency: "usd",
-                  unit_amount: tax.totalTaxCents,
-                  product_data: {
-                    name: `Tax (${tax.jurisdiction})`,
-                  },
-                },
-                quantity: 1,
-              },
-            ]
-          : []),
       ],
       metadata: {
   booking_id: bookingId,
