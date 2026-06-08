@@ -18,7 +18,7 @@ router.get("/test", async (req, res) => {
   }
 });
 
-router.post("/master", async (req, res) => {
+router.get("/master", async (req, res) => {
   try {
     const token = await getBonzahToken();
 
