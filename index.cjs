@@ -84,7 +84,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   } catch (err) {
     console.error("❌ Failed to fetch Stripe account:", err.message);
   }
-  startSchedulers();
+  // startSchedulers();
 });
 
 
