@@ -28,7 +28,7 @@ router.get("/master", async (req, res) => {
       `${process.env.BONZAH_API_URL}/api/v1/Bonzah/master`,
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          token: token,
         },
         params: {
           master_name: "country",
