@@ -18,8 +18,9 @@ router.get("/", async (req, res) => {
 
     if (q) {
       const term = `%${String(q)}%`;
-      // search make OR model OR vin
-      query = query.or(`make.ilike.${term},model.ilike.${term},vin.ilike.${term}`);
+      query = query.or(
+        `make.ilike.${term},model.ilike.${term},vin.ilike.${term}`
+      );
     }
 
     const { data, error } = await query;
@@ -46,9 +47,11 @@ router.post("/", async (req, res) => {
       photos,
       insurance_required,
       status,
+      is_test_vehicle,
     } = req.body || {};
 
     if (!host_id) return res.status(400).json({ error: "Missing host_id" });
+
     if (!make || !model || !year || !daily_price || !city || !vin) {
       return res.status(400).json({ error: "Missing required fields" });
     }
@@ -64,6 +67,7 @@ router.post("/", async (req, res) => {
       photos: Array.isArray(photos) ? photos : [],
       insurance_required: Boolean(insurance_required),
       status: status ? String(status) : "available",
+      is_test_vehicle: Boolean(is_test_vehicle),
     };
 
     const { data, error } = await supabaseAdmin
@@ -82,7 +86,3 @@ router.post("/", async (req, res) => {
 });
 
 module.exports = router;
-
-
-
-
