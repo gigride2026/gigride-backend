@@ -13,20 +13,78 @@ async function getBonzahToken() {
     {
       email: process.env.BONZAH_EMAIL,
       pwd: process.env.BONZAH_PASSWORD,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
     }
   );
 
   if (response.data.status !== 0) {
-    throw new Error("Bonzah authentication failed");
+    throw new Error(response.data.txt || "Bonzah authentication failed");
   }
 
   cachedToken = response.data.token;
-
   tokenExpires = Date.now() + 14 * 60 * 1000;
 
   return cachedToken;
 }
 
+async function bonzahPremiumCalc(payload) {
+  const token = await getBonzahToken();
+
+  const response = await axios.post(
+    `${process.env.BONZAH_API_URL}/api/v1/bonzah/premiumCalc`,
+    {
+      ...payload,
+      token,
+      in_auth_token: token,
+      inAuthToken: token,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "in-auth-token": token,
+        "in_auth_token": token,
+        "auth-token": token,
+        Authorization: `Bearer ${token}`,
+        token,
+      },
+    }
+  );
+
+  return response.data;
+}
+
+async function bonzahQuote(payload) {
+  const token = await getBonzahToken();
+
+  const response = await axios.post(
+    `${process.env.BONZAH_API_URL}/api/v1/bonzah/quote`,
+    {
+      ...payload,
+      token,
+      in_auth_token: token,
+      inAuthToken: token,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "in-auth-token": token,
+        "in_auth_token": token,
+        "auth-token": token,
+        Authorization: `Bearer ${token}`,
+        token,
+      },
+    }
+  );
+
+  return response.data;
+}
+
 module.exports = {
   getBonzahToken,
+  bonzahPremiumCalc,
+  bonzahQuote,
 };
