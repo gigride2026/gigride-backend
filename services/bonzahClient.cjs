@@ -53,17 +53,19 @@ async function bonzahPremiumCalc(payload) {
   return response.data;
 }
 
-async function bonzahPremiumCalc(payload) {
+async function bonzahQuote(payload) {
   const token = await getBonzahToken();
 
   const response = await axios.post(
-    `${process.env.BONZAH_API_URL}/api/v1/Bonzah/premiumCalc?token=${encodeURIComponent(token)}`,
+    `${process.env.BONZAH_API_URL}/api/v1/bonzah/quote`,
     {
       ...payload,
+      token,
     },
     {
       headers: {
         "Content-Type": "application/json",
+        token,
       },
     }
   );
