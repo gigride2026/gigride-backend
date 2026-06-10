@@ -44,13 +44,9 @@ async function bonzahPremiumCalc(payload) {
     },
     {
       headers: {
-        "Content-Type": "application/json",
-        "in-auth-token": token,
-        "in_auth_token": token,
-        "auth-token": token,
-        Authorization: `Bearer ${token}`,
-        token,
-      },
+  "Content-Type": "application/json",
+  token,
+},
     }
   );
 
@@ -63,11 +59,9 @@ async function bonzahQuote(payload) {
   const response = await axios.post(
     `${process.env.BONZAH_API_URL}/api/v1/bonzah/quote`,
     {
-      ...payload,
-      token,
-      in_auth_token: token,
-      inAuthToken: token,
-    },
+  ...payload,
+  token,
+},
     {
       headers: {
         "Content-Type": "application/json",
