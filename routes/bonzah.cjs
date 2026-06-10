@@ -28,7 +28,7 @@ router.get("/master", async (req, res) => {
     const axios = require("axios");
 
     const response = await axios.get(
-      `${process.env.BONZAH_API_URL}/api/v1/bonzah/master`,
+      `${process.env.BONZAH_API_URL}/api/v1/Bonzah/master`,
       {
         headers: {
           "in-auth-token": token,
