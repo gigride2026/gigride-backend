@@ -54,7 +54,7 @@ async function bonzahQuote(payload) {
   const token = await getBonzahToken();
 
   const response = await axios.post(
-    `${process.env.BONZAH_API_URL}/api/v1/bonzah/quote`,
+    `${process.env.BONZAH_API_URL}/api/v1/Bonzah/quote`,
     {
       ...payload,
       token,
