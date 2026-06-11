@@ -25,10 +25,17 @@ async function getBonzahToken() {
     throw new Error(response.data.txt || "Bonzah authentication failed");
   }
 
-  cachedToken = response.data.token;
-  tokenExpires = Date.now() + 14 * 60 * 1000;
+  cachedToken = response.data.data?.token || response.data.token;
+  tokenExpires = Date.now() + 10 * 60 * 1000;
 
   return cachedToken;
+}
+
+function bonzahHeaders(token) {
+  return {
+    "Content-Type": "application/json",
+    "in-auth-token": token,
+  };
 }
 
 async function bonzahPremiumCalc(payload) {
@@ -36,14 +43,9 @@ async function bonzahPremiumCalc(payload) {
 
   const response = await axios.post(
     `${process.env.BONZAH_API_URL}/api/v1/Bonzah/premiumCalc`,
+    payload,
     {
-      ...payload,
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token,
-      },
+      headers: bonzahHeaders(token),
     }
   );
 
@@ -55,15 +57,9 @@ async function bonzahQuote(payload) {
 
   const response = await axios.post(
     `${process.env.BONZAH_API_URL}/api/v1/Bonzah/quote`,
+    payload,
     {
-      ...payload,
-      token,
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        token,
-      },
+      headers: bonzahHeaders(token),
     }
   );
 
