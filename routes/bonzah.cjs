@@ -75,13 +75,13 @@ router.get("/premium-test", async (req, res) => {
 
   first_name: "Greg",
   last_name: "Jones",
-  date_of_birth: "01/01/1990",
+  date_of_birth: "01/01/1988",
   address_line_1: "123 Test Street",
   city: "Atlanta",
   state: "Georgia",
   zip_code: "30303",
   country: "United States",
-  email: "test@gigride.app",
+  email: "greg@test.com",
   phone_no: "4705551234",
 
   cdw_cover: true,
