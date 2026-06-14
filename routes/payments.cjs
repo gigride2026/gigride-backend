@@ -311,9 +311,6 @@ const applicationFeeAmountCents = totalPriceCents - hostPayoutCents;
       payment_method_types: ["card"],
       automatic_tax: { enabled: true },
 billing_address_collection: "required",
-customer_update: {
-  address: "auto",
-},
       
       line_items: [
         {
