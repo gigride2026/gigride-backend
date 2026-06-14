@@ -70,6 +70,28 @@ router.post("/", async (req, res) => {
       is_test_vehicle: Boolean(is_test_vehicle),
     };
 
+    const { data: profile, error: profileErr } = await supabaseAdmin
+  .from("profiles")
+  .select("full_name, phone, avatar_url, city, identity_status")
+  .eq("id", host_id)
+  .single();
+
+if (profileErr) {
+  return res.status(400).json({ error: profileErr.message });
+}
+
+if (
+  !profile?.full_name ||
+  !profile?.phone ||
+  !profile?.avatar_url ||
+  !profile?.city
+) {
+  return res.status(403).json({
+    error:
+      "Complete your host profile before listing a vehicle. Full name, phone, profile photo, and city are required.",
+  });
+}
+
     const { data, error } = await supabaseAdmin
       .from("vehicles")
       .insert([payload])
