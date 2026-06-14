@@ -309,15 +309,18 @@ console.log("✅ RENTAL HOST ID:", updatedBooking?.host_id);
 } else {
   console.log("✅ Host payout created:", payoutData);
 
-  await notifyAdmin({
-    supabaseAdmin,
-    title: "GigRide platform fee collected 💼",
-    body: `Platform fee collected for booking ${bookingId}.`,
-    data: {
-      type: "platform_fee_collected",
-      bookingId,
-    },
-  });
+  const platformFeeDollars = ((booking.host_fee_cents || 0) / 100).toFixed(2);
+
+await notifyAdmin({
+  supabaseAdmin,
+  title: "GigRide fee collected 💼",
+  body: `$${platformFeeDollars} platform fee collected for booking ${bookingId}.`,
+  data: {
+    type: "platform_fee_collected",
+    bookingId,
+    platformFeeCents: booking.host_fee_cents || 0,
+  },
+});
 
   console.log("✅ PLATFORM FEE ADMIN PUSH SENT");
 }
