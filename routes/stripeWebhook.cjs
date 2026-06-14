@@ -10,7 +10,10 @@ const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 
 // IMPORTANT: Stripe needs the raw body to verify signature
-router.post("/stripe", async (req, res) => {
+router.post(
+  "/stripe",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
     try {
       const sig = req.headers["stripe-signature"];
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
