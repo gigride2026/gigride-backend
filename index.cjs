@@ -28,7 +28,11 @@ const app = express();
 app.use(cors());
 
 // ✅ Stripe webhook must come BEFORE express.json()
-app.use("/webhooks", stripeWebhook);
+app.use(
+  "/webhooks",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
 
 // ✅ NOW parse JSON bodies for everything else
 app.use(express.json());
