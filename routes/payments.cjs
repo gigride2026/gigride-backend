@@ -314,17 +314,12 @@ billing_address_collection: "required",
 customer_update: {
   address: "auto",
 },
-      payment_intent_data: {
-  application_fee_amount: applicationFeeAmountCents,
-  transfer_data: {
-    destination: hostProfile.stripe_account_id,
-  },
-},
+      
       line_items: [
         {
           price_data: {
             currency: "usd",
-            unit_amount: rentalSubtotalCents,
+            unit_amount: 100,
             product_data: { name: "GigRide rental subtotal" },
           },
           quantity: 1,
