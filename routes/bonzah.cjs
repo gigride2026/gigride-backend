@@ -147,18 +147,31 @@ console.log("🛡️ Bonzah booking error:", error);
       return `${mm}/${dd}/${yyyy}`;
     };
 
-    const payload = {
-      trip_start_date: formatBonzahDate(startDate),
-      trip_end_date: formatBonzahDate(endDate),
-      pickup_country: "United States",
-      pickup_state: pickupState,
-      drop_off_time: "Same",
-      cdw_cover: true,
-      rcli_cover: true,
-      sli_cover: false,
-      pai_cover: false,
-      skip_validation: true,
-    };
+    const {
+  cdw_cover = true,
+  rcli_cover = true,
+  sli_cover = false,
+  pai_cover = false,
+} = req.body || {};
+
+const payload = {
+  trip_start_date: formatBonzahDate(startDate),
+  trip_end_date: formatBonzahDate(endDate),
+  pickup_country: "United States",
+  pickup_state: pickupState,
+
+  residence_country: "United States",
+  residence_state: pickupState,
+
+  drop_off_time: "Same",
+
+  cdw_cover,
+  rcli_cover,
+  sli_cover: rcli_cover ? sli_cover : false,
+  pai_cover,
+
+  skip_validation: true,
+};
 
     console.log("🛡️ Bonzah booking premium payload:", payload);
 
