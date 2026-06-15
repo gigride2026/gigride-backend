@@ -114,23 +114,14 @@ router.post("/booking/:bookingId/premium", async (req, res) => {
     const { bookingId } = req.params;
 
     const { data: booking, error } = await supabaseAdmin
-      .from("bookings")
-      .select(`
-        id,
-        start_at,
-        end_at,
-        start_date,
-        end_date,
-        vehicle_id,
-        vehicles (
-          id,
-          state,
-          pickup_state,
-          location_state
-        )
-      `)
-      .eq("id", bookingId)
-      .maybeSingle();
+  .from("bookings")
+  .select("*")
+  .eq("id", bookingId)
+  .maybeSingle();
+
+  console.log("🛡️ Bonzah bookingId:", bookingId);
+console.log("🛡️ Bonzah booking lookup:", booking);
+console.log("🛡️ Bonzah booking error:", error);
 
     if (error || !booking) {
       return res.status(404).json({
