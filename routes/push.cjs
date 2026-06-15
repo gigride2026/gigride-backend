@@ -103,6 +103,24 @@ A driver requested your ${vehicleTitle}. Review it now.`,
       },
     });
 
+    const adminUserId = process.env.ADMIN_USER_ID;
+
+if (adminUserId) {
+  await notifyUser({
+    supabaseAdmin,
+    userId: adminUserId,
+    title: "📲 New GigRide Booking",
+    body: `A driver requested ${vehicleTitle}.`,
+    data: {
+      type: "admin_booking_requested",
+      booking_id,
+      vehicle_id: booking.vehicle_id,
+      driver_id: booking.driver_id,
+      host_id: booking.host_id,
+    },
+  });
+}
+
     return res.json({ ok: true });
   } catch (e) {
     console.error("booking-requested push error:", e);
