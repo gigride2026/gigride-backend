@@ -37,7 +37,7 @@ function daysBetweenInclusive(startDate, endDate) {
   const msPerDay = 1000 * 60 * 60 * 24;
   const diff = Math.round((end.getTime() - start.getTime()) / msPerDay);
 
-  return Math.max(diff, 1);
+  return Math.max(diff + 1, 1);
 }
 
 function calculateDepositCents(startDate, endDate) {
