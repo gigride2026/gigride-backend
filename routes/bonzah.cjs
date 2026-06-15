@@ -133,11 +133,7 @@ console.log("🛡️ Bonzah booking error:", error);
     const startDate = booking.start_at || booking.start_date;
     const endDate = booking.end_at || booking.end_date;
 
-    const pickupState =
-      booking.vehicles?.pickup_state ||
-      booking.vehicles?.location_state ||
-      booking.vehicles?.state ||
-      "GA";
+    const pickupState = "Georgia";
 
     const formatBonzahDate = (value) => {
       const d = new Date(value);
