@@ -316,7 +316,7 @@ billing_address_collection: "required",
         {
           price_data: {
             currency: "usd",
-            unit_amount: 100,
+            unit_amount: rentalSubtotalCents,
             product_data: { name: "GigRide rental subtotal" },
           },
           quantity: 1,
