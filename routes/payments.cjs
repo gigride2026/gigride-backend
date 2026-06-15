@@ -154,7 +154,7 @@ router.post("/deposit/checkout-session", async (req, res) => {
               name: "Refundable security deposit",
               description: `Booking ${bookingId}`,
             },
-            unit_amount: 100,
+            unit_amount: depositAmountCents,
           },
         },
       ],
