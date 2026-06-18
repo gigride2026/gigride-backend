@@ -36,11 +36,11 @@ router.get("/master", async (req, res) => {
           "Content-Type": "application/json",
         },
         params: {
-          master_name: "country",
-          values: "country",
-          filter: "",
-          filter_value: "",
-        },
+  master_name: "state",
+  values: "state",
+  filter: "",
+  filter_value: "",
+},
       }
     );
 
