@@ -212,21 +212,21 @@ const payload = {
 
     console.log("🛡️ Bonzah booking premium payload:", payload);
 
-    const data = await bonzahPremiumCalc(payload);
+const data = await bonzahPremiumCalc(payload);
 
-    res.json({
-      ok: true,
-      bookingId,
-      payload,
-      bonzah: data,
-    });
-  } catch (e) {
-    console.error("❌ Bonzah booking premium failed:", e);
-    res.status(500).json({
-      ok: false,
-      error: e.message,
-    });
-  }
+res.json({
+  ok: true,
+  bookingId,
+  payload,
+  bonzah: data,
+});
+} catch (e) {
+  console.error("❌ Bonzah booking premium failed:", e);
+  res.status(500).json({
+    ok: false,
+    error: e.message,
+  });
+}
 });
 
 module.exports = router;
