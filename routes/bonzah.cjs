@@ -200,6 +200,10 @@ const payload = {
   country: "United States",
   email: "greg@test.com",
   phone_no: "4705551234",
+  vehicle_year: "2022",
+vehicle_make: "Kia",
+vehicle_model: "K5",
+vehicle_vin: "TESTVIN12345678901",
 
   cdw_cover,
   rcli_cover,
