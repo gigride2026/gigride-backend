@@ -326,6 +326,7 @@ router.post("/booking/:bookingId/quote", async (req, res) => {
         .from("bookings")
         .update({
           bonzah_quote_id: quoteId,
+          bonzah_policy_id: data?.data?.policy_id || null,
           bonzah_premium: premium,
           bonzah_total_due: premium,
           bonzah_selected_coverages: {
