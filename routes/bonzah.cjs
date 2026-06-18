@@ -196,7 +196,7 @@ const payload = {
   sli_cover,
   pai_cover,
 
-  skip_validation: true,
+  skip_validation: false,
 };
 
 
