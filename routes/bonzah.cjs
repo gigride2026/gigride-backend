@@ -71,7 +71,7 @@ router.get("/premium-test", async (req, res) => {
   pickup_state: "GA",
   residence_country: "United States",
   residence_state: "GA",
-  drop_off_time: "Same",
+  drop_off_time: "10:00 AM",
   cdw_cover: true,
   rcli_cover: true,
   sli_cover: false,
