@@ -164,12 +164,13 @@ console.log("🛡️ Bonzah booking error:", error);
     const endDate = booking.end_at || booking.end_date;
 
     const formatBonzahDate = (value) => {
-      const d = new Date(value);
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      const yyyy = d.getFullYear();
-      return `${mm}/${dd}/${yyyy}`;
-    };
+  const d = new Date(value);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+
+  return `${mm}/${dd}/${yyyy} 10:00:00`;
+};
 
     const {
   cdw_cover = true,
@@ -188,21 +189,24 @@ const payload = {
   residence_country: "United States",
   residence_state: "Georgia",
 
-  drop_off_time: "10:00",
+  drop_off_time: "Same",
 
   first_name: "Greg",
-  last_name: "Jones",
-  date_of_birth: "01/01/1988",
-  address_line_1: "123 Main Street",
-  city: "Atlanta",
-  state: "Georgia",
-  zip_code: "30303",
-  country: "United States",
-  email: "greg@test.com",
-  phone_no: "4705551234",
-  vehicle_year: "2022",
-vehicle_make: "Kia",
-vehicle_model: "K5",
+last_name: "Jones",
+dob: "01/01/1988",
+
+address_line_1: "123 Main Street",
+city: "Atlanta",
+state: "Georgia",
+zip_code: "30303",
+country: "United States",
+
+pri_email_address: "greg@test.com",
+phone_no: "4705551234",
+
+year: "2022",
+make: "Kia",
+model: "K5",
 vehicle_vin: "TESTVIN12345678901",
 
   cdw_cover,
