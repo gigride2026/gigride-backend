@@ -181,21 +181,34 @@ console.log("🛡️ Bonzah booking error:", error);
 const payload = {
   trip_start_date: formatBonzahDate(startDate),
   trip_end_date: formatBonzahDate(endDate),
+
   pickup_country: "United States",
-  pickup_state: "GA",
+  pickup_state: "Georgia",
 
   residence_country: "United States",
-  residence_state: "GA",
+  residence_state: "Georgia",
 
   drop_off_time: "Same",
 
+  first_name: "Greg",
+  last_name: "Jones",
+  date_of_birth: "01/01/1988",
+  address_line_1: "123 Main Street",
+  city: "Atlanta",
+  state: "Georgia",
+  zip_code: "30303",
+  country: "United States",
+  email: "greg@test.com",
+  phone_no: "4705551234",
+
   cdw_cover,
   rcli_cover,
-  sli_cover: rcli_cover ? sli_cover : false,
+  sli_cover,
   pai_cover,
 
   skip_validation: false,
 };
+
 
     console.log("🛡️ Bonzah booking premium payload:", payload);
 
