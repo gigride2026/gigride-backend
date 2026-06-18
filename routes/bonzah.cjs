@@ -169,7 +169,7 @@ console.log("🛡️ Bonzah booking error:", error);
   const dd = String(d.getDate()).padStart(2, "0");
   const yyyy = d.getFullYear();
 
-  return `${mm}/${dd}/${yyyy} 10:00:00`;
+  return `${mm}/${dd}/${yyyy}`;
 };
 
     const {
@@ -191,30 +191,12 @@ const payload = {
 
   drop_off_time: "Same",
 
-  first_name: "Greg",
-last_name: "Jones",
-dob: "01/01/1988",
-
-address_line_1: "123 Main Street",
-city: "Atlanta",
-state: "Georgia",
-zip_code: "30303",
-country: "United States",
-
-pri_email_address: "greg@test.com",
-phone_no: "4705551234",
-
-year: "2022",
-make: "Kia",
-model: "K5",
-vehicle_vin: "TESTVIN12345678901",
-
   cdw_cover,
   rcli_cover,
   sli_cover,
   pai_cover,
 
-  skip_validation: false,
+  skip_validation: true,
 };
 
 
