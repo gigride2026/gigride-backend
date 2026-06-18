@@ -188,7 +188,7 @@ const payload = {
   residence_country: "United States",
   residence_state: "Georgia",
 
-  drop_off_time: "Same",
+  drop_off_time: "10:00 AM",
 
   first_name: "Greg",
   last_name: "Jones",
