@@ -133,8 +133,6 @@ console.log("🛡️ Bonzah booking error:", error);
     const startDate = booking.start_at || booking.start_date;
     const endDate = booking.end_at || booking.end_date;
 
-    const pickupState = "Georgia";
-
     const formatBonzahDate = (value) => {
       const d = new Date(value);
       const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -154,10 +152,10 @@ const payload = {
   trip_start_date: formatBonzahDate(startDate),
   trip_end_date: formatBonzahDate(endDate),
   pickup_country: "United States",
-  pickup_state: "Georgia",
+  pickup_state: "GA",
 
   residence_country: "United States",
-  residence_state: "Georgia",
+  residence_state: "GA",
 
   drop_off_time: "Same",
 
