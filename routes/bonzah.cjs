@@ -65,8 +65,8 @@ router.post("/premium", async (req, res) => {
 router.get("/premium-test", async (req, res) => {
   try {
     const data = await bonzahPremiumCalc({
-  trip_start_date: "06/15/2026",
-  trip_end_date: "06/22/2026",
+  trip_start_date: "06/19/2026",
+trip_end_date: "06/20/2026",
   pickup_country: "United States",
   pickup_state: "Georgia",
   residence_country: "United States",
