@@ -35,21 +35,38 @@ function bonzahHeaders(token) {
   return {
     "Content-Type": "application/json",
     "in-auth-token": token,
+    "auth-token": token,
+    Authorization: `Bearer ${token}`,
   };
 }
 
 async function bonzahPremiumCalc(payload) {
   const token = await getBonzahToken();
 
-  const response = await axios.post(
-    `${process.env.BONZAH_API_URL}/api/v1/Bonzah/premiumCalc`,
-    payload,
-    {
-      headers: bonzahHeaders(token),
-    }
-  );
+  try {
+    const response = await axios.post(
+      `${process.env.BONZAH_API_URL}/api/v1/Bonzah/premiumCalc`,
+      payload,
+      {
+        headers: bonzahHeaders(token),
+      }
+    );
 
-  return response.data;
+    console.log(
+      "🛡️ Bonzah premium raw:",
+      JSON.stringify(response.data, null, 2)
+    );
+
+    return response.data;
+  } catch (e) {
+    console.error("❌ Bonzah premium axios error:", {
+      message: e.message,
+      status: e.response?.status,
+      data: e.response?.data,
+    });
+
+    throw e;
+  }
 }
 
 async function bonzahQuote(payload) {
