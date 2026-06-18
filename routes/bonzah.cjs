@@ -66,24 +66,12 @@ router.get("/premium-test", async (req, res) => {
   try {
     const data = await bonzahPremiumCalc({
   trip_start_date: "06/19/2026",
-trip_end_date: "06/20/2026",
+  trip_end_date: "06/20/2026",
   pickup_country: "United States",
-  pickup_state: "Georgia",
+  pickup_state: "GA",
   residence_country: "United States",
-  residence_state: "Georgia",
+  residence_state: "GA",
   drop_off_time: "Same",
-
-  first_name: "Greg",
-  last_name: "Jones",
-  date_of_birth: "01/01/1988",
-  address_line_1: "123 Test Street",
-  city: "Atlanta",
-  state: "Georgia",
-  zip_code: "30303",
-  country: "United States",
-  email: "greg@test.com",
-  phone_no: "4705551234",
-
   cdw_cover: true,
   rcli_cover: true,
   sli_cover: false,
