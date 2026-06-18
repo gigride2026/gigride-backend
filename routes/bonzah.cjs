@@ -184,10 +184,10 @@ const payload = {
   trip_end_date: formatBonzahDate(endDate),
 
   pickup_country: "United States",
-  pickup_state: "Georgia",
+  pickup_state: "GA",
 
   residence_country: "United States",
-  residence_state: "Georgia",
+  residence_state: "GA",
 
   drop_off_time: "Same",
 
