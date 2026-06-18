@@ -166,7 +166,7 @@ const payload = {
   sli_cover: rcli_cover ? sli_cover : false,
   pai_cover,
 
-  skip_validation: true,
+  skip_validation: false,
 };
 
     console.log("🛡️ Bonzah booking premium payload:", payload);
