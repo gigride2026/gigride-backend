@@ -86,6 +86,48 @@ router.get("/premium-test", async (req, res) => {
     });
   }
 });
+router.get("/state-test", async (req, res) => {
+  const combos = [
+    { country: "United States", state: "GA" },
+    { country: "United States", state: "Georgia" },
+    { country: "US", state: "GA" },
+    { country: "USA", state: "GA" },
+    { country: "United States of America", state: "GA" },
+    { country: "US", state: "Georgia" },
+    { country: "USA", state: "Georgia" },
+  ];
+
+  const results = [];
+
+  for (const combo of combos) {
+    try {
+      const data = await bonzahPremiumCalc({
+        trip_start_date: "06/19/2026",
+        trip_end_date: "06/20/2026",
+        pickup_country: combo.country,
+        pickup_state: combo.state,
+        residence_country: combo.country,
+        residence_state: combo.state,
+        drop_off_time: "Same",
+        cdw_cover: true,
+        rcli_cover: true,
+        sli_cover: false,
+        pai_cover: false,
+        skip_validation: false,
+      });
+
+      results.push({ combo, response: data });
+    } catch (e) {
+      results.push({
+        combo,
+        error: e.message,
+        data: e.response?.data || null,
+      });
+    }
+  }
+
+  res.json(results);
+});
 
 router.post("/quote", async (req, res) => {
   try {
