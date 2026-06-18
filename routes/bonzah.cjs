@@ -201,7 +201,7 @@ const payload = {
 
 
     console.log("🛡️ Bonzah booking premium payload:", payload);
-
+console.log("🛡️ PREMIUM PAYLOAD JSON:", JSON.stringify(payload, null, 2));
 const data = await bonzahPremiumCalc(payload);
 
 res.json({
