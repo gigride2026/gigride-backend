@@ -258,7 +258,7 @@ router.post("/booking/:bookingId/quote", async (req, res) => {
       const dd = String(d.getDate()).padStart(2, "0");
       const yyyy = d.getFullYear();
 
-      return `${mm}/${dd}/${yyyy} 10:00:00`;
+      return `${mm}/${dd}/${yyyy}`;
     };
 
     const {
