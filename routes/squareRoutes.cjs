@@ -31,7 +31,7 @@ router.post("/create-payment-link", async (req, res) => {
           ]
         : [
             {
-              name: "Rental Payment",
+              name: "Rental Charge",
               quantity: "1",
               base_price_money: {
                 amount: Number(req.body.rental_cents || amount_cents),
@@ -41,7 +41,7 @@ router.post("/create-payment-link", async (req, res) => {
             ...(Number(req.body.bonzah_fee_cents || 0) > 0
               ? [
                   {
-                    name: "Bonzah Protection",
+                    name: "Rental Protection",
                     quantity: "1",
                     base_price_money: {
                       amount: Number(req.body.bonzah_fee_cents),
@@ -65,7 +65,7 @@ router.post("/create-payment-link", async (req, res) => {
             ...(Number(req.body.tax_cents || 0) > 0
               ? [
                   {
-                    name: "Estimated Tax",
+                    name: "Taxes",
                     quantity: "1",
                     base_price_money: {
                       amount: Number(req.body.tax_cents),
