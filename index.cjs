@@ -21,6 +21,7 @@ const adminAlerts = require("./routes/adminAlerts.cjs");
 const messagesRoutes = require("./routes/messages.cjs");
 const bonzahRoutes = require("./routes/bonzah.cjs");
 const paypalRoutes = require("./routes/paypal.cjs");
+const squareRoutes = require("./routes/squareRoutes.cjs");
 const app = express();
 
 app.use(cors());
@@ -47,6 +48,7 @@ app.use("/api/admin-alerts", adminAlerts);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/bonzah", bonzahRoutes);
 app.use("/api/paypal", paypalRoutes);
+app.use("/api/square", squareRoutes);
 
 module.exports = app;
 
