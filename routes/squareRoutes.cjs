@@ -1,11 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
+const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
     ? "https://connect.squareup.com"
     : "https://connect.squareupsandbox.com";
+
+const SQUARE_VERSION = "2025-04-16";
 
 router.post("/create-payment-link", async (req, res) => {
   try {
@@ -83,7 +86,7 @@ router.post("/create-payment-link", async (req, res) => {
         headers: {
           Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
           "Content-Type": "application/json",
-          "Square-Version": "2025-04-16",
+          "Square-Version": SQUARE_VERSION,
         },
         body: JSON.stringify({
           idempotency_key: idempotencyKey,
@@ -106,9 +109,6 @@ router.post("/create-payment-link", async (req, res) => {
     const text = await response.text();
     const json = text ? JSON.parse(text) : {};
 
-    console.log("SQUARE PAYMENT LINK STATUS:", response.status);
-    console.log("SQUARE PAYMENT LINK RESPONSE:", json);
-
     if (!response.ok) {
       return res.status(response.status).json({
         error:
@@ -124,6 +124,98 @@ router.post("/create-payment-link", async (req, res) => {
     });
   } catch (e) {
     console.error("SQUARE CREATE PAYMENT LINK ERROR:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/webhook", async (req, res) => {
+  try {
+    const event = req.body;
+
+    console.log("SQUARE WEBHOOK EVENT:", event?.type);
+
+    const paymentId = event?.data?.object?.payment?.id;
+
+    if (!paymentId) {
+      return res.json({ ok: true, ignored: "No payment ID" });
+    }
+
+    const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        "Square-Version": SQUARE_VERSION,
+      },
+    });
+
+    const paymentJson = await paymentRes.json();
+
+    if (!paymentRes.ok) {
+      console.log("SQUARE PAYMENT FETCH ERROR:", paymentJson);
+      return res.json({ ok: true, ignored: "Payment fetch failed" });
+    }
+
+    const payment = paymentJson?.payment;
+
+    if (payment?.status !== "COMPLETED") {
+      return res.json({ ok: true, ignored: `Payment status ${payment?.status}` });
+    }
+
+    const orderId = payment?.order_id;
+
+    if (!orderId) {
+      return res.json({ ok: true, ignored: "No order ID" });
+    }
+
+    const orderRes = await fetch(`${SQUARE_BASE_URL}/v2/orders/${orderId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        "Square-Version": SQUARE_VERSION,
+      },
+    });
+
+    const orderJson = await orderRes.json();
+
+    if (!orderRes.ok) {
+      console.log("SQUARE ORDER FETCH ERROR:", orderJson);
+      return res.json({ ok: true, ignored: "Order fetch failed" });
+    }
+
+    const metadata = orderJson?.order?.metadata || {};
+    const bookingId = metadata.booking_id;
+    const paymentType = metadata.payment_type;
+
+    if (!bookingId || !paymentType) {
+      return res.json({ ok: true, ignored: "Missing booking metadata" });
+    }
+
+    const update =
+      paymentType === "deposit"
+        ? {
+            status: "deposit_paid",
+            deposit_payment_status: "paid",
+            square_deposit_payment_id: paymentId,
+          }
+        : {
+            payment_status: "paid",
+            square_rental_payment_id: paymentId,
+          };
+
+    const { error } = await supabaseAdmin
+      .from("bookings")
+      .update(update)
+      .eq("id", bookingId);
+
+    if (error) throw error;
+
+    console.log("SQUARE PAYMENT APPLIED:", {
+      bookingId,
+      paymentType,
+      paymentId,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("SQUARE WEBHOOK ERROR:", e);
     return res.status(500).json({ error: e.message });
   }
 });
