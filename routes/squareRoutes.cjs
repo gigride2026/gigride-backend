@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
-const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
@@ -18,46 +17,103 @@ router.post("/create-payment-link", async (req, res) => {
 
     const idempotencyKey = crypto.randomUUID();
 
-    const response = await fetch(`${SQUARE_BASE_URL}/v2/online-checkout/payment-links`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-        "Square-Version": "2025-04-16",
-      },
-      body: JSON.stringify({
-        idempotency_key: idempotencyKey,
-        quick_pay: {
-          name:
-            payment_type === "deposit"
-              ? `GigRide Deposit - ${booking_id}`
-              : `GigRide Rental Payment - ${booking_id}`,
-          price_money: {
-            amount: Number(amount_cents),
-            currency: "USD",
+    const lineItems =
+      payment_type === "deposit"
+        ? [
+            {
+              name: "Security Deposit",
+              quantity: "1",
+              base_price_money: {
+                amount: Number(amount_cents),
+                currency: "USD",
+              },
+            },
+          ]
+        : [
+            {
+              name: "Rental Payment",
+              quantity: "1",
+              base_price_money: {
+                amount: Number(req.body.rental_cents || amount_cents),
+                currency: "USD",
+              },
+            },
+            ...(Number(req.body.bonzah_fee_cents || 0) > 0
+              ? [
+                  {
+                    name: "Bonzah Protection",
+                    quantity: "1",
+                    base_price_money: {
+                      amount: Number(req.body.bonzah_fee_cents),
+                      currency: "USD",
+                    },
+                  },
+                ]
+              : []),
+            ...(Number(req.body.gigride_protection_fee_cents || 0) > 0
+              ? [
+                  {
+                    name: "GigRide Protection Fee",
+                    quantity: "1",
+                    base_price_money: {
+                      amount: Number(req.body.gigride_protection_fee_cents),
+                      currency: "USD",
+                    },
+                  },
+                ]
+              : []),
+            ...(Number(req.body.tax_cents || 0) > 0
+              ? [
+                  {
+                    name: "Estimated Tax",
+                    quantity: "1",
+                    base_price_money: {
+                      amount: Number(req.body.tax_cents),
+                      currency: "USD",
+                    },
+                  },
+                ]
+              : []),
+          ];
+
+    const response = await fetch(
+      `${SQUARE_BASE_URL}/v2/online-checkout/payment-links`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+          "Square-Version": "2025-04-16",
+        },
+        body: JSON.stringify({
+          idempotency_key: idempotencyKey,
+          order: {
+            location_id: process.env.SQUARE_LOCATION_ID,
+            line_items: lineItems,
+            metadata: {
+              booking_id: String(booking_id),
+              payment_type: String(payment_type),
+            },
           },
-          location_id: process.env.SQUARE_LOCATION_ID,
-        },
-        checkout_options: {
-          redirect_url: process.env.APP_DEEP_LINK || "gigride://square-success",
-        },
-        pre_populated_data: {},
-        payment_note: JSON.stringify({
-          booking_id,
-          payment_type,
+          checkout_options: {
+            redirect_url:
+              process.env.APP_DEEP_LINK || "gigride://square-success",
+          },
         }),
-      }),
-    });
+      }
+    );
 
     const text = await response.text();
-    let json = text ? JSON.parse(text) : {};
+    const json = text ? JSON.parse(text) : {};
 
     console.log("SQUARE PAYMENT LINK STATUS:", response.status);
     console.log("SQUARE PAYMENT LINK RESPONSE:", json);
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: json?.errors?.[0]?.detail || "Failed to create Square payment link",
+        error:
+          json?.errors?.[0]?.detail ||
+          "Failed to create Square payment link",
         square: json,
       });
     }
