@@ -189,16 +189,13 @@ router.post("/webhook", async (req, res) => {
     }
 
     const update =
-      paymentType === "deposit"
-        ? {
-            status: "deposit_paid",
-            deposit_payment_status: "paid",
-            square_deposit_payment_id: paymentId,
-          }
-        : {
-            payment_status: "paid",
-            square_rental_payment_id: paymentId,
-          };
+  paymentType === "deposit"
+    ? {
+        status: "deposit_paid",
+      }
+    : {
+        payment_status: "paid",
+      };
 
     const { error } = await supabaseAdmin
       .from("bookings")
