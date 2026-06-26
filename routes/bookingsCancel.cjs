@@ -1,13 +1,8 @@
 // routes/bookingsCancel.cjs
 const express = require("express");
-const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 
 const router = express.Router();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-11-17.clover",
-});
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
@@ -138,20 +133,17 @@ const hoursBeforeStart = Math.max(0, hoursBeforeStartRaw);
     const refundCents = Math.max(0, Math.floor(paidCents * refundPercent));
     const feeCents = Math.max(0, paidCents - refundCents);
 
-    // 8) Issue Stripe refund (if any)
-    let refundResult = null;
-    if (refundCents > 0 && booking.payment_intent_id) {
-      refundResult = await stripe.refunds.create({
-        payment_intent: booking.payment_intent_id,
-        amount: refundCents,
-        reason: "requested_by_customer",
-        metadata: {
-          booking_id: booking.id,
-          cancelled_by: cancelledBy,
-          policy,
-        },
-      });
-    }
+    // 8) Refund is now handled manually through Square for launch
+let refundResult = null;
+
+if (refundCents > 0) {
+  console.log("MANUAL REFUND REQUIRED:", {
+    booking_id: booking.id,
+    refund_cents: refundCents,
+    cancelled_by: cancelledBy,
+    policy,
+  });
+}
 
     // 9) Update booking status + cancellation details
     const { data: updated, error: uErr } = await supabaseAdmin
