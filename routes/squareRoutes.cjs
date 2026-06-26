@@ -265,4 +265,79 @@ return res.json({ ok: true });
   }
 });
 
+router.post("/test-create-payout/:bookingId", async (req, res) => {
+  try {
+    const bookingId = String(req.params.bookingId || "").trim();
+
+    if (!bookingId) {
+      return res.status(400).json({ error: "booking id required" });
+    }
+
+    const { data: updatedBooking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("*")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bookingError) throw bookingError;
+
+    if (!updatedBooking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    const grossCents = Number(
+      updatedBooking.total_price_cents ||
+        updatedBooking.rental_subtotal_cents ||
+        0
+    );
+
+    const platformFeeCents = Math.round(grossCents * 0.08);
+    const hostPayoutCents = Math.max(0, grossCents - platformFeeCents);
+
+    const payoutAvailableAt = updatedBooking.end_date
+      ? new Date(
+          new Date(updatedBooking.end_date).getTime() + 24 * 60 * 60 * 1000
+        ).toISOString()
+      : null;
+
+    const { data: payout, error: payoutError } = await supabaseAdmin
+      .from("host_payouts")
+      .upsert(
+        {
+          booking_id: updatedBooking.id,
+          host_id: updatedBooking.host_id,
+          vehicle_id: updatedBooking.vehicle_id,
+          driver_id: updatedBooking.driver_id || null,
+          period_start: updatedBooking.start_date || null,
+          period_end: updatedBooking.end_date || null,
+          gross_amount_cents: grossCents,
+          application_fee_cents: platformFeeCents,
+          net_amount_cents: hostPayoutCents,
+          rental_subtotal_cents: grossCents,
+          host_fee_cents: platformFeeCents,
+          host_payout_cents: hostPayoutCents,
+          payout_available_at: payoutAvailableAt,
+          status: "pending",
+        },
+        { onConflict: "booking_id" }
+      )
+      .select("*")
+      .maybeSingle();
+
+    if (payoutError) throw payoutError;
+
+    return res.json({
+      ok: true,
+      booking_id: bookingId,
+      gross_cents: grossCents,
+      platform_fee_cents: platformFeeCents,
+      host_payout_cents: hostPayoutCents,
+      payout,
+    });
+  } catch (e) {
+    console.error("TEST CREATE PAYOUT ERROR:", e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
