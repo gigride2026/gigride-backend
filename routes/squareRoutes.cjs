@@ -192,25 +192,73 @@ router.post("/webhook", async (req, res) => {
   paymentType === "deposit"
     ? {
         status: "deposit_paid",
+        deposit_paid: true,
+        deposit_paid_at: new Date().toISOString(),
       }
     : {
         payment_status: "paid",
+        paid_at: new Date().toISOString(),
       };
 
-    const { error } = await supabaseAdmin
-      .from("bookings")
-      .update(update)
-      .eq("id", bookingId);
+const { data: updatedBooking, error } = await supabaseAdmin
+  .from("bookings")
+  .update(update)
+  .eq("id", bookingId)
+  .select("*")
+  .maybeSingle();
 
-    if (error) throw error;
+if (error) throw error;
 
-    console.log("SQUARE PAYMENT APPLIED:", {
-      bookingId,
-      paymentType,
-      paymentId,
-    });
+if (paymentType === "rental" && updatedBooking) {
+  const grossCents = Number(
+    updatedBooking.total_price_cents ||
+      updatedBooking.rental_subtotal_cents ||
+      0
+  );
 
-    return res.json({ ok: true });
+  const platformFeeCents = Math.round(grossCents * 0.08);
+  const hostPayoutCents = Math.max(0, grossCents - platformFeeCents);
+
+  const payoutAvailableAt = updatedBooking.end_date
+    ? new Date(
+        new Date(updatedBooking.end_date).getTime() + 24 * 60 * 60 * 1000
+      ).toISOString()
+    : null;
+
+  const { error: payoutError } = await supabaseAdmin
+    .from("host_payouts")
+    .upsert(
+      {
+        booking_id: updatedBooking.id,
+        host_id: updatedBooking.host_id,
+        vehicle_id: updatedBooking.vehicle_id,
+        driver_id: updatedBooking.driver_id || null,
+        period_start: updatedBooking.start_date || null,
+        period_end: updatedBooking.end_date || null,
+        gross_amount_cents: grossCents,
+        application_fee_cents: platformFeeCents,
+        net_amount_cents: hostPayoutCents,
+        rental_subtotal_cents: grossCents,
+        host_fee_cents: platformFeeCents,
+        host_payout_cents: hostPayoutCents,
+        payout_available_at: payoutAvailableAt,
+        status: "pending",
+      },
+      { onConflict: "booking_id" }
+    );
+
+  if (payoutError) {
+    console.error("HOST PAYOUT UPSERT ERROR:", payoutError);
+  }
+}
+
+console.log("SQUARE PAYMENT APPLIED:", {
+  bookingId,
+  paymentType,
+  paymentId,
+});
+
+return res.json({ ok: true });
   } catch (e) {
     console.error("SQUARE WEBHOOK ERROR:", e);
     return res.status(500).json({ error: e.message });
