@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 
-const stripe = require("../utils/stripeClient.cjs");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 function normStatus(s) {
@@ -46,7 +45,11 @@ router.post("/:bookingId/settle", async (req, res) => {
 
     const settlementType = String(settlement_type || "").trim();
 
-    if (!["full_release", "partial_deduction", "full_forfeit"].includes(settlementType)) {
+    if (
+      !["full_release", "partial_deduction", "full_forfeit"].includes(
+        settlementType
+      )
+    ) {
       return res.status(400).json({ error: "Invalid settlement_type" });
     }
 
@@ -69,10 +72,15 @@ router.post("/:bookingId/settle", async (req, res) => {
     }
 
     if (normStatus(booking.status) !== "completed") {
-      return res.status(400).json({ error: "Deposit can only be settled after trip completion" });
+      return res
+        .status(400)
+        .json({ error: "Deposit can only be settled after trip completion" });
     }
 
-    if (!booking.deposit_paid) {
+    const depositPaid =
+      booking.deposit_paid === true || normStatus(booking.status) === "completed";
+
+    if (!depositPaid) {
       return res.status(400).json({ error: "Deposit was not paid" });
     }
 
@@ -85,7 +93,10 @@ router.post("/:bookingId/settle", async (req, res) => {
       return res.status(400).json({ error: "Invalid deposit amount" });
     }
 
-    const requestedDeduction = Math.max(0, Number(deduction_amount_cents || 0));
+    const requestedDeduction = Math.max(
+      0,
+      Number(deduction_amount_cents || 0)
+    );
 
     let deductionAmountCents = 0;
     let refundAmountCents = 0;
@@ -95,12 +106,15 @@ router.post("/:bookingId/settle", async (req, res) => {
       refundAmountCents = depositAmountCents;
     } else if (settlementType === "partial_deduction") {
       if (requestedDeduction <= 0) {
-        return res.status(400).json({ error: "Deduction amount required for partial_deduction" });
+        return res
+          .status(400)
+          .json({ error: "Deduction amount required for partial_deduction" });
       }
 
       if (requestedDeduction >= depositAmountCents) {
         return res.status(400).json({
-          error: "Deduction amount must be less than full deposit for partial_deduction",
+          error:
+            "Deduction amount must be less than full deposit for partial_deduction",
         });
       }
 
@@ -109,30 +123,6 @@ router.post("/:bookingId/settle", async (req, res) => {
     } else if (settlementType === "full_forfeit") {
       deductionAmountCents = depositAmountCents;
       refundAmountCents = 0;
-    }
-
-    const paymentIntentId =
-      booking.stripe_payment_intent_id ||
-      booking.stripe_payment_id ||
-      null;
-
-    if (!paymentIntentId) {
-      return res.status(400).json({ error: "No Stripe payment intent found for deposit" });
-    }
-
-    let stripeRefund = null;
-
-    if (refundAmountCents > 0) {
-      stripeRefund = await stripe.refunds.create({
-        payment_intent: paymentIntentId,
-        amount: refundAmountCents,
-        metadata: {
-          bookingId: booking.id,
-          kind: "deposit_refund",
-          settlementType,
-          deductionAmountCents: String(deductionAmountCents),
-        },
-      });
     }
 
     const settledAt = new Date().toISOString();
@@ -148,6 +138,7 @@ router.post("/:bookingId/settle", async (req, res) => {
         deposit_refund_amount_cents: refundAmountCents,
         deposit_settlement_type: settlementType,
         deposit_settlement_notes: notes || null,
+        refund_status: refundAmountCents > 0 ? "manual_required" : "none",
       })
       .eq("id", booking.id)
       .select("*")
@@ -166,7 +157,7 @@ router.post("/:bookingId/settle", async (req, res) => {
       settlement_type: settlementType,
       reason: reason || null,
       notes: notes || null,
-      stripe_refund_id: stripeRefund?.id || null,
+      refund_status: refundAmountCents > 0 ? "manual_required" : "none",
     };
 
     const { data: adjustment, error: adjustmentError } = await supabaseAdmin
@@ -183,7 +174,11 @@ router.post("/:bookingId/settle", async (req, res) => {
       ok: true,
       booking: updatedBooking,
       adjustment,
-      stripe_refund_id: stripeRefund?.id || null,
+      refund_status: refundAmountCents > 0 ? "manual_required" : "none",
+      message:
+        refundAmountCents > 0
+          ? "Deposit settled. Manual Square refund required."
+          : "Deposit settled with no refund due.",
     });
   } catch (e) {
     console.error("💥 deposit settle route error:", e);
