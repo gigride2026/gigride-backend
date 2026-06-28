@@ -26,7 +26,10 @@ function isFailed(status) {
 function verifyWebhookSignature(req) {
   const secret = process.env.DIDIT_WEBHOOK_SECRET;
 
-  if (!secret) return true;
+  if (!secret) {
+  console.error("DIDIT_WEBHOOK_SECRET missing");
+  return false;
+}
   if (!req.rawBody) return false;
 
   const received =
@@ -63,13 +66,33 @@ router.post("/session", async (req, res) => {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, email, is_host, is_driver")
+      .select("id, email, is_host, is_driver, identity_status, identity_verified, didit_verification_url")
       .eq("id", profileId)
       .single();
 
     if (profileError || !profile) {
       return res.status(404).json({ error: "Profile not found" });
     }
+
+    if (profile.identity_verified === true || profile.identity_status === "verified") {
+  return res.json({
+    ok: true,
+    alreadyVerified: true,
+    message: "Identity already verified.",
+  });
+}
+
+if (
+  profile.identity_status === "pending_review" ||
+  profile.identity_status === "pending"
+) {
+  return res.json({
+    ok: true,
+    alreadyPending: true,
+    message: "Identity verification is already in progress.",
+    verification_url: profile.didit_verification_url || null,
+  });
+}
 
     const session = await createDiditSession({
       profileId,
