@@ -22,6 +22,7 @@ const messagesRoutes = require("./routes/messages.cjs");
 const bonzahRoutes = require("./routes/bonzah.cjs");
 const paypalRoutes = require("./routes/paypal.cjs");
 const squareRoutes = require("./routes/squareRoutes.cjs");
+const payoutRoutes = require("./routes/payoutRoutes.cjs");
 const diditRoutes = require("./routes/diditRoutes.cjs");
 const app = express();
 
@@ -56,6 +57,7 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/bonzah", bonzahRoutes);
 app.use("/api/paypal", paypalRoutes);
 app.use("/api/square", squareRoutes);
+app.use("/api/payouts", payoutRoutes);
 app.use("/api/didit", diditRoutes);
 
 // ================================

@@ -211,18 +211,13 @@ if (error) throw error;
 
 if (paymentType === "rental" && updatedBooking) {
   const grossCents = Number(
-  updatedBooking.rental_subtotal_cents ||
-    updatedBooking.total_price_cents ||
-    0
-);
+    updatedBooking.rental_subtotal_cents ||
+      updatedBooking.total_price_cents ||
+      0
+  );
 
-const platformFeeCents = Number(
-  updatedBooking.host_fee_cents || Math.round(grossCents * 0.08)
-);
-
-const hostPayoutCents = Number(
-  updatedBooking.host_payout_cents || Math.max(0, grossCents - platformFeeCents)
-);
+  const platformFeeCents = Math.round(grossCents * 0.08);
+  const hostPayoutCents = Math.max(0, grossCents - platformFeeCents);
 
   const payoutAvailableAt = updatedBooking.end_date
     ? new Date(
