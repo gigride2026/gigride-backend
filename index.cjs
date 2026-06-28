@@ -22,13 +22,20 @@ const messagesRoutes = require("./routes/messages.cjs");
 const bonzahRoutes = require("./routes/bonzah.cjs");
 const paypalRoutes = require("./routes/paypal.cjs");
 const squareRoutes = require("./routes/squareRoutes.cjs");
+const diditRoutes = require("./routes/diditRoutes.cjs");
 const app = express();
 
 app.use(cors());
 
 
 // ✅ NOW parse JSON bodies for everything else
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // ✅ Routes after body parsing
@@ -49,30 +56,31 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/bonzah", bonzahRoutes);
 app.use("/api/paypal", paypalRoutes);
 app.use("/api/square", squareRoutes);
-
-module.exports = app;
+app.use("/api/didit", diditRoutes);
 
 // ================================
 // Health Check
 // ================================
 app.get("/", (req, res) => {
-  res.json({ ok: true, message: "GigCar backend running" });
+  res.json({ ok: true, message: "GigRide backend running" });
 });
 
 // ================================
 // Start Server
 // ================================
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Backend listening on http://0.0.0.0:${PORT}`);
   console.log("ENV SUPABASE_URL =", !!process.env.SUPABASE_URL);
   console.log("ENV HAS SERVICE KEY =", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
   console.log("ENV HAS ANON KEY =", !!process.env.SUPABASE_ANON_KEY);
+  console.log("ENV HAS DIDIT API KEY =", !!process.env.DIDIT_API_KEY);
+  console.log("ENV HAS DIDIT WORKFLOW ID =", !!process.env.DIDIT_WORKFLOW_ID);
 
   // startSchedulers();
 });
 
+module.exports = app;
 
 
 
