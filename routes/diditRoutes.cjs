@@ -63,7 +63,7 @@ router.post("/session", async (req, res) => {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("id, email, role")
+      .select("id, email, is_host, is_driver")
       .eq("id", profileId)
       .single();
 
@@ -74,7 +74,7 @@ router.post("/session", async (req, res) => {
     const session = await createDiditSession({
       profileId,
       email: email || profile.email,
-      role: role || profile.role || "driver",
+      role: role || (profile.is_host ? "host" : "driver"),
     });
 
     await supabaseAdmin
