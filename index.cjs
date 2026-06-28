@@ -79,7 +79,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log("ENV HAS DIDIT API KEY =", !!process.env.DIDIT_API_KEY);
   console.log("ENV HAS DIDIT WORKFLOW ID =", !!process.env.DIDIT_WORKFLOW_ID);
 
-  // startSchedulers();
+  startSchedulers();
 });
 
 module.exports = app;

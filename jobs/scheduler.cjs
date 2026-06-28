@@ -16,8 +16,8 @@ function startSchedulers() {
 
   console.log("🕒 Starting schedulers...");
 
-  // Every hour at minute 0
-  cron.schedule("*/2 * * * *", async () => {
+  // Every Tuesday and Friday at 9:00 AM
+cron.schedule("0 9 * * 2,5", async () => {
     try {
       console.log("🚀 Running scheduled payout release job...");
       const result = await releasePayouts();
@@ -27,8 +27,8 @@ function startSchedulers() {
     }
   });
 
-  // Every hour at minute 5
-  cron.schedule("*/3 * * * *", async () => {
+  // Every day at 9:30 AM
+cron.schedule("30 9 * * *", async () => {
     try {
       console.log("💸 Running scheduled deposit refund job...");
       const result = await releaseDepositRefunds();
