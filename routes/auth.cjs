@@ -41,7 +41,40 @@ console.log("AUTH anon key starts  =", (process.env.SUPABASE_ANON_KEY || "").sli
 router.post("/admin-signup-alert", async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
-    const role = String(req.body?.role || "user").trim();
+    const role = String(req.body?.role || "user").trim().toLowerCase();
+    const userId = String(req.body?.user_id || req.body?.id || "").trim();
+
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    if (userId) {
+      const isDriver = role === "driver";
+      const isHost = role === "host";
+
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            email,
+            is_driver: isDriver,
+            is_host: isHost,
+            joined_at: new Date().toISOString(),
+            identity_status: "not_started",
+            identity_verified: false,
+          },
+          { onConflict: "id" }
+        );
+
+      if (profileError) {
+        console.error("❌ Profile upsert failed:", profileError);
+      } else {
+        console.log("✅ Profile upserted for signup:", email);
+      }
+    } else {
+      console.warn("⚠️ No user_id provided for signup alert:", email);
+    }
 
     await notifyAdmin({
       supabaseAdmin,
@@ -51,14 +84,17 @@ router.post("/admin-signup-alert", async (req, res) => {
         type: "new_signup",
         email,
         role,
+        user_id: userId,
       },
     });
-try {
-  await sendWelcomeEmail({ to: email });
-  console.log("✅ Welcome email sent:", email);
-} catch (emailErr) {
-  console.error("❌ Welcome email failed:", emailErr.message);
-}
+
+    try {
+      await sendWelcomeEmail({ to: email });
+      console.log("✅ Welcome email sent:", email);
+    } catch (emailErr) {
+      console.error("❌ Welcome email failed:", emailErr.message);
+    }
+
     return res.json({ ok: true });
   } catch (e) {
     console.error("admin-signup-alert error:", e);
