@@ -12,20 +12,15 @@ router.post("/delete-account", async (req, res) => {
     }
 
     const deletedAt = new Date().toISOString();
+    const deletedEmail = `deleted-user-${userId}@gigride.deleted`;
 
+    // Remove push tokens
     await supabaseAdmin
       .from("user_push_tokens")
       .delete()
       .eq("user_id", userId);
 
-    await supabaseAdmin
-      .from("vehicles")
-      .update({
-        is_available: false,
-        deleted_at: deletedAt,
-      })
-      .eq("host_id", userId);
-
+    // Remove push token from profile too
     await supabaseAdmin
       .from("profiles")
       .update({
@@ -33,23 +28,37 @@ router.post("/delete-account", async (req, res) => {
         phone: null,
         avatar_url: null,
         expo_push_token: null,
-        email: `deleted-user-${userId}@gigride.deleted`,
+        email: deletedEmail,
+
         identity_status: "deleted",
         identity_verified: false,
+        identity_provider: null,
+        identity_updated_at: deletedAt,
+
         license_front_url: null,
         license_back_url: null,
         selfie_url: null,
         host_id_front_url: null,
         host_selfie_url: null,
         host_registration_url: null,
+
         didit_session_id: null,
         didit_session_token: null,
         didit_verification_url: null,
+        didit_last_status: null,
         didit_webhook_payload: null,
-        updated_at: deletedAt,
       })
       .eq("id", userId);
 
+    // Disable vehicles instead of deleting, because bookings/payouts may reference them
+    await supabaseAdmin
+      .from("vehicles")
+      .update({
+        is_available: false,
+      })
+      .eq("host_id", userId);
+
+    // Delete Supabase Auth login
     const { error: deleteUserError } =
       await supabaseAdmin.auth.admin.deleteUser(userId);
 
