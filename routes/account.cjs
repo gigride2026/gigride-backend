@@ -27,9 +27,9 @@ router.post("/delete-account", async (req, res) => {
       .eq("user_id", userId);
 
     // Remove push token from profile too
-    await supabaseAdmin
-      .from("profiles")
-      .update({
+   const { error: profileError } = await supabaseAdmin
+  .from("profiles")
+  .update({
         full_name: null,
         phone: null,
         avatar_url: null,
@@ -56,13 +56,25 @@ router.post("/delete-account", async (req, res) => {
       })
       .eq("id", userId);
 
+      if (profileError) {
+  console.error("Profile deletion/anonymize error:", profileError);
+  return res.status(500).json({ error: profileError.message });
+}
+
     // Disable vehicles instead of deleting, because bookings/payouts may reference them
-    await supabaseAdmin
-      .from("vehicles")
-      .update({
-        is_available: false,
-      })
-      .eq("host_id", userId);
+const { error: vehicleError } = await supabaseAdmin
+  .from("vehicles")
+  .update({
+    is_available: false,
+  })
+  .eq("host_id", userId);
+
+if (vehicleError) {
+  console.error("Vehicle disable error:", vehicleError);
+  return res.status(500).json({
+    error: vehicleError.message,
+  });
+}
 
     // Delete Supabase Auth login
     const { error: deleteUserError } =
