@@ -1,6 +1,7 @@
-const express = require("express");
-const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+require("dotenv").config();
 
+const express = require("express");
+const cors = require("cors");
 const router = express.Router();
 
 router.post("/delete-account", async (req, res) => {
