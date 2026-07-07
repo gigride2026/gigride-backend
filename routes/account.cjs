@@ -8,31 +8,48 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-function withTimeout(promise, label, ms = 8000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out`)), ms)
-    ),
-  ]);
+async function timed(label, promise, ms = 10000) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 router.post("/delete-account", async (req, res) => {
   try {
-    console.log("STEP 1 - Route started");
+    console.log("DELETE ACCOUNT: started");
 
-    const userId = String(req.body?.userId || "").trim();
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "").trim();
 
-    if (!userId) {
-      return res.status(400).json({ error: "Missing userId" });
+    if (!token) {
+      return res.status(401).json({ error: "Missing authorization token" });
     }
 
+    const { data: userData, error: userError } = await timed(
+      "verify user",
+      supabaseAdmin.auth.getUser(token)
+    );
+
+    if (userError || !userData?.user?.id) {
+      return res.status(401).json({ error: userError?.message || "Invalid user" });
+    }
+
+    const userId = userData.user.id;
     const deletedAt = new Date().toISOString();
     const deletedEmail = `deleted-user-${userId}@gigride.deleted`;
 
-    console.log("STEP 2 - Updating profile");
+    console.log("DELETE ACCOUNT: anonymizing profile");
 
-    const { error: profileError } = await withTimeout(
+    const { error: profileError } = await timed(
+      "profile update",
       supabaseAdmin
         .from("profiles")
         .update({
@@ -53,8 +70,7 @@ router.post("/delete-account", async (req, res) => {
           didit_last_status: null,
           didit_webhook_payload: null,
         })
-        .eq("id", userId),
-      "profile update"
+        .eq("id", userId)
     );
 
     if (profileError) {
@@ -62,14 +78,14 @@ router.post("/delete-account", async (req, res) => {
       return res.status(500).json({ error: profileError.message });
     }
 
-    console.log("STEP 3 - Disabling vehicles");
+    console.log("DELETE ACCOUNT: disabling vehicles");
 
-    const { error: vehicleError } = await withTimeout(
+    const { error: vehicleError } = await timed(
+      "vehicle update",
       supabaseAdmin
         .from("vehicles")
         .update({ is_available: false })
-        .eq("host_id", userId),
-      "vehicle update"
+        .eq("host_id", userId)
     );
 
     if (vehicleError) {
@@ -77,19 +93,19 @@ router.post("/delete-account", async (req, res) => {
       return res.status(500).json({ error: vehicleError.message });
     }
 
-    console.log("STEP 4 - Deleting auth user");
+    console.log("DELETE ACCOUNT: deleting auth user");
 
-    const { error: deleteUserError } = await withTimeout(
-      supabaseAdmin.auth.admin.deleteUser(userId),
-      "auth delete"
+    const { error: authDeleteError } = await timed(
+      "auth delete",
+      supabaseAdmin.auth.admin.deleteUser(userId)
     );
 
-    if (deleteUserError) {
-      console.error("Auth delete error:", deleteUserError);
-      return res.status(500).json({ error: deleteUserError.message });
+    if (authDeleteError) {
+      console.error("Auth delete error:", authDeleteError);
+      return res.status(500).json({ error: authDeleteError.message });
     }
 
-    console.log("STEP 5 - Account deleted");
+    console.log("DELETE ACCOUNT: complete");
 
     return res.json({ ok: true });
   } catch (e) {
