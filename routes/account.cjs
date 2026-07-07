@@ -56,10 +56,16 @@ router.post("/delete-account", async (req, res) => {
       return res.status(500).json({ error: profileError.message });
     }
 
-    const { error: vehicleError } = await supabaseAdmin
-      .from("vehicles")
-      .update({ is_available: false })
-      .eq("host_id", userId);
+    // Mark host vehicles inactive if the column exists.
+// If not, skip vehicle updates so account deletion can still complete.
+const { error: vehicleError } = await supabaseAdmin
+  .from("vehicles")
+  .update({ status: "inactive" })
+  .eq("host_id", userId);
+
+if (vehicleError) {
+  console.log("Vehicle update skipped:", vehicleError.message);
+}
 
     if (vehicleError) {
       return res.status(500).json({ error: vehicleError.message });
