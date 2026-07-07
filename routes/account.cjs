@@ -11,6 +11,7 @@ const supabaseAdmin = createClient(
 
 router.post("/delete-account", async (req, res) => {
   try {
+    console.log("STEP 1 - Route started");
     const userId = String(req.body?.userId || "").trim();
 
     if (!userId) {
