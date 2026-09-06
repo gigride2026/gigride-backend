@@ -44,6 +44,12 @@ router.post("/", async (req, res) => {
       return res.status(404).json({ error: "Vehicle not found" });
     }
 
+    if (vehicle.is_test_vehicle) {
+  return res.status(403).json({
+    error: "This vehicle is not available for public booking.",
+  });
+}
+
     // 📊 mileage snapshot
     const mileage = getMileageSnapshot({
       rentalType: rental_type,
@@ -145,7 +151,7 @@ insurance_protection_fee_cents: protectionFeeDailyCents,
 
 insurance_total_cents: insuranceTotalCents,
         status: "requested",
-        metadata: { is_test: true },
+        metadata: { is_test: false },
         pickup_time,
         dropoff_time,
 

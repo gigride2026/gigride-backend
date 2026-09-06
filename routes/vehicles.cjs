@@ -9,9 +9,10 @@ router.get("/", async (req, res) => {
     const { status, city, q } = req.query;
 
     let query = supabaseAdmin
-      .from("vehicles")
-      .select("*")
-      .order("created_at", { ascending: false });
+  .from("vehicles")
+  .select("*")
+  .eq("is_test_vehicle", false)
+  .order("created_at", { ascending: false });
 
     if (status) query = query.eq("status", String(status));
     if (city) query = query.ilike("city", `%${String(city)}%`);
