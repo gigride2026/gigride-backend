@@ -38,17 +38,32 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const {
-      make,
-      model,
-      year,
-      daily_price,
-      city,
-      vin,
-      photos,
-      insurance_required,
-      status,
-      is_test_vehicle,
-    } = req.body || {};
+  make,
+  model,
+  trim,
+  year,
+  daily_price,
+  city,
+  vin,
+  license_plate,
+  plate_state,
+  verification_status,
+  vin_decoded,
+  vin_decode_source,
+  photos,
+  image_url,
+
+  insurance_required,
+  insurance_enabled,
+
+  daily_miles_included,
+  overage_rate_cents,
+  allows_unlimited_miles,
+  unlimited_miles_price_cents,
+
+  status,
+  is_test_vehicle,
+} = req.body || {};
 
     // 🔐 Authenticate host
     const authHeader = req.headers.authorization || "";
@@ -68,7 +83,7 @@ router.post("/", async (req, res) => {
     const hostId = user.id;
 
     // ✅ Required fields
-    if (!make || !model || !year || daily_price == null || !city || !vin) {
+   if (!make || !model || !year || daily_price == null || !city) {
       return res.status(400).json({
         error: "Missing required fields",
       });
@@ -87,10 +102,44 @@ router.post("/", async (req, res) => {
     const weeklyRateCents = Math.round(daily * 7 * 0.85 * 100);
     const monthlyRateCents = Math.round(daily * 30 * 0.75 * 100);
 
+    const includedMiles = Number(daily_miles_included ?? 250);
+const overageRateCents = Number(overage_rate_cents ?? 25);
+const unlimitedMilesPriceCents = Number(unlimited_miles_price_cents ?? 0);
+
+if (
+  !Number.isFinite(includedMiles) ||
+  includedMiles < 0 ||
+  includedMiles > 1000
+) {
+  return res.status(400).json({
+    error: "Daily included mileage must be between 0 and 1000 miles.",
+  });
+}
+
+if (
+  !Number.isFinite(overageRateCents) ||
+  overageRateCents < 0 ||
+  overageRateCents > 500
+) {
+  return res.status(400).json({
+    error: "Mileage overage rate must be between $0.00 and $5.00 per mile.",
+  });
+}
+
+if (
+  !Number.isFinite(unlimitedMilesPriceCents) ||
+  unlimitedMilesPriceCents < 0 ||
+  unlimitedMilesPriceCents > 20000
+) {
+  return res.status(400).json({
+    error: "Unlimited mileage price must be between $0 and $200 per day.",
+  });
+}
+
     // 👤 Verify host profile is complete
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
-      .select("full_name, phone, avatar_url, city, identity_status")
+      .select("full_name, phone, avatar_url, city, identity_status, identity_verified")
       .eq("id", hostId)
       .single();
 
@@ -112,25 +161,73 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const isIdentityApproved =
+  profile.identity_verified === true ||
+  profile.identity_status === "verified";
+
+if (!isIdentityApproved) {
+  return res.status(403).json({
+    error: "Identity verification is required before listing a vehicle.",
+  });
+}
+
     // 🚗 Vehicle payload
     const payload = {
-      host_id: hostId,
-      make: String(make).trim(),
-      model: String(model).trim(),
-      year: String(year).trim(),
+  host_id: hostId,
 
-      daily_price: daily,
-      daily_rate_cents: dailyRateCents,
-      weekly_rate_cents: weeklyRateCents,
-      monthly_rate_cents: monthlyRateCents,
+  make: String(make).trim(),
+  model: String(model).trim(),
+  trim: trim ? String(trim).trim() : null,
+  year: Number(year),
 
-      city: String(city).trim(),
-      vin: String(vin).trim().toUpperCase(),
-      photos: Array.isArray(photos) ? photos : [],
-      insurance_required: Boolean(insurance_required),
-      status: status ? String(status) : "available",
-      is_test_vehicle: Boolean(is_test_vehicle),
-    };
+  daily_price: daily,
+  daily_rate_cents: dailyRateCents,
+  weekly_rate_cents: weeklyRateCents,
+  monthly_rate_cents: monthlyRateCents,
+
+  city: String(city).trim(),
+
+  vin: vin ? String(vin).trim().toUpperCase() : null,
+  license_plate: license_plate
+    ? String(license_plate).trim().toUpperCase()
+    : null,
+  plate_state: plate_state
+    ? String(plate_state).trim().toUpperCase()
+    : "GA",
+
+  verification_status: verification_status
+    ? String(verification_status)
+    : "not_submitted",
+
+  vin_decoded: Boolean(vin_decoded),
+  vin_decode_source: vin_decode_source
+    ? String(vin_decode_source)
+    : null,
+
+  photos: Array.isArray(photos) ? photos : [],
+  image_url: image_url ? String(image_url) : null,
+
+  insurance_required: Boolean(insurance_required),
+insurance_enabled: Boolean(insurance_enabled),
+insurance_provider: insurance_enabled
+  ? "abi"
+  : null,
+insurance_protection_fee_cents: insurance_enabled
+  ? 399
+  : 0,
+
+  daily_miles_included: includedMiles,
+overage_rate_cents: overageRateCents,
+allows_unlimited_miles: Boolean(allows_unlimited_miles),
+unlimited_miles_price_cents: allows_unlimited_miles
+  ? unlimitedMilesPriceCents
+  : 0,
+
+
+
+  status: status ? String(status) : "available",
+  is_test_vehicle: Boolean(is_test_vehicle),
+};
 
     const { data, error } = await supabaseAdmin
       .from("vehicles")
