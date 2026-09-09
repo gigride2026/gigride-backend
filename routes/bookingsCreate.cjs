@@ -71,6 +71,30 @@ router.post("/", async (req, res) => {
   dropoff_time,
 } = req.body;
 
+// 🔐 Authenticate driver before any booking database work
+const authHeader = req.headers.authorization || "";
+
+if (!authHeader.startsWith("Bearer ")) {
+  return res.status(401).json({
+    error: "Unauthorized",
+  });
+}
+
+const token = authHeader.slice(7);
+
+const {
+  data: { user },
+  error: authError,
+} = await supabaseAdmin.auth.getUser(token);
+
+if (authError || !user) {
+  return res.status(401).json({
+    error: "Unauthorized",
+  });
+}
+
+const driverId = user.id;
+
     // 🔍 fetch vehicle mileage settings
     const { data: vehicle, error: vehicleErr } = await supabaseAdmin
       .from("vehicles")
@@ -192,22 +216,6 @@ if (blockedDates?.length) {
     error: "Vehicle is blocked by the host for selected dates.",
   });
 }
-const authHeader = req.headers.authorization || "";
-
-const token = authHeader.replace("Bearer ", "");
-
-const {
-  data: { user },
-  error: authError,
-} = await supabaseAdmin.auth.getUser(token);
-
-if (authError || !user) {
-  return res.status(401).json({
-    error: "Unauthorized",
-  });
-}
-
-const driverId = user.id;
 
 if (vehicle.host_id === driverId) {
   return res.status(400).json({
