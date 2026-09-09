@@ -109,12 +109,22 @@ if (
 
 const rentalDays = tripDays(start_date, end_date);
 
-    // 📊 mileage snapshot
-    const mileage = getMileageSnapshot({
-      rentalType: rental_type,
-      vehicle,
-      unlimitedSelected: unlimited_miles_selected,
-    });
+const serverRentalType =
+  rentalDays >= 30
+    ? "monthly"
+    : rentalDays >= 7
+
+
+
+    ? "weekly"
+    : "daily";
+
+// 📊 mileage snapshot
+const mileage = getMileageSnapshot({
+  rentalType: serverRentalType,
+  vehicle,
+  unlimitedSelected: unlimited_miles_selected,
+});
 
     const rentalPricing = calculateRentalPriceCents(
   vehicle,
@@ -212,7 +222,7 @@ if (vehicle.host_id === driverId) {
         vehicle_id,
         host_id: vehicle.host_id,
         driver_id: driverId,
-        rental_type,
+        rental_type: serverRentalType,
         start_date,
         end_date,
         total_price_cents: finalTotal,
