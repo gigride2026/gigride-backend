@@ -7,8 +7,6 @@ const supabase = createClient(
 
 module.exports = async function authMiddleware(req, res, next) {
   try {
-    // ✅ DEBUG LOG (this is the correct place)
-    console.log('AUTH HEADER:', req.headers.authorization);
 
     const authHeader = req.headers.authorization;
 

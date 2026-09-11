@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const authMiddleware = require("../middlewares/auth.cjs");
 
 // GET /api/vehicles?status=available&city=Atlanta&q=jeep
 router.get("/", async (req, res) => {
@@ -35,7 +36,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/vehicles
-router.post("/", async (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
     const {
   make,
@@ -65,22 +66,8 @@ router.post("/", async (req, res) => {
   is_test_vehicle,
 } = req.body || {};
 
-    // 🔐 Authenticate host
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return res.status(401).json({
-        error: "Unauthorized",
-      });
-    }
-
-    const hostId = user.id;
+    // 🔐 Authenticated by authMiddleware
+    const hostId = req.user.id;
 
     // ✅ Required fields
    if (!make || !model || !year || daily_price == null || !city) {
