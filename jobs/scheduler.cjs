@@ -1,7 +1,6 @@
 require("dotenv").config();
 const cron = require("node-cron");
 
-const { releasePayouts } = require("./releasePayouts.cjs");
 const { releaseDepositRefunds } = require("./releaseDepositRefunds.cjs");
 
 let started = false;
@@ -16,16 +15,8 @@ function startSchedulers() {
 
   console.log("🕒 Starting schedulers...");
 
-  // Every Tuesday and Friday at 9:00 AM
-cron.schedule("0 9 * * 2,5", async () => {
-    try {
-      console.log("🚀 Running scheduled payout release job...");
-      const result = await releasePayouts();
-      console.log("✅ Scheduled payout release result:", result);
-    } catch (err) {
-      console.error("❌ Scheduled payout release failed:", err);
-    }
-  });
+  // Host payout scheduler temporarily disabled until real Square host payouts are connected.
+  // Do not mark payouts paid unless funds have actually been transferred.
 
   // Every day at 9:30 AM
 cron.schedule("30 9 * * *", async () => {
