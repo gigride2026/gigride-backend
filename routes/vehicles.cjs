@@ -44,6 +44,8 @@ router.post("/", authMiddleware, async (req, res) => {
   trim,
   year,
   daily_price,
+  weekly_rate_cents,
+  monthly_rate_cents,
   city,
   vin,
   license_plate,
@@ -86,8 +88,19 @@ router.post("/", authMiddleware, async (req, res) => {
     }
 
     const dailyRateCents = Math.round(daily * 100);
-    const weeklyRateCents = Math.round(daily * 7 * 0.85 * 100);
-    const monthlyRateCents = Math.round(daily * 30 * 0.75 * 100);
+
+    const requestedWeeklyRateCents = Number(weekly_rate_cents);
+    const requestedMonthlyRateCents = Number(monthly_rate_cents);
+
+    const weeklyRateCents =
+      Number.isFinite(requestedWeeklyRateCents) && requestedWeeklyRateCents > 0
+        ? Math.round(requestedWeeklyRateCents)
+        : Math.round(daily * 7 * 0.85 * 100);
+
+    const monthlyRateCents =
+      Number.isFinite(requestedMonthlyRateCents) && requestedMonthlyRateCents > 0
+        ? Math.round(requestedMonthlyRateCents)
+        : Math.round(daily * 30 * 0.75 * 100);
 
     const includedMiles = Number(daily_miles_included ?? 250);
 const overageRateCents = Number(overage_rate_cents ?? 25);
