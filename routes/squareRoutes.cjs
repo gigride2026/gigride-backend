@@ -536,9 +536,49 @@ router.post("/webhook", async (req, res) => {
       return res.json({ ok: true, ignored: "No payment ID" });
     }
 
-    const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
+    
+    let squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
+    const eventMerchantId = String(event?.merchant_id || "").trim();
+
+    if (eventMerchantId) {
+      const { data: hostProfile, error: hostLookupError } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("square_merchant_id", eventMerchantId)
+        .maybeSingle();
+
+      if (hostLookupError) {
+        console.error("SQUARE WEBHOOK HOST LOOKUP ERROR:", hostLookupError.message);
+        return res.json({ ok: true, ignored: "Host lookup failed" });
+      }
+
+      if (hostProfile?.id) {
+        const { data: credentials, error: credentialError } = await supabaseAdmin
+          .from("square_host_credentials")
+          .select("access_token")
+          .eq("host_id", hostProfile.id)
+          .maybeSingle();
+
+        if (credentialError || !credentials?.access_token) {
+          console.error(
+            "SQUARE WEBHOOK HOST CREDENTIAL ERROR:",
+            credentialError?.message || "Missing host Square access token"
+          );
+          return res.json({ ok: true, ignored: "Host Square credentials unavailable" });
+        }
+
+        squareAccessToken = credentials.access_token;
+      }
+    }
+
+    if (!squareAccessToken) {
+      console.error("SQUARE WEBHOOK ERROR: No Square access token available");
+      return res.json({ ok: true, ignored: "Square credentials unavailable" });
+    }
+
+const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
       headers: {
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${squareAccessToken}`,
         "Square-Version": SQUARE_VERSION,
       },
     });
@@ -564,7 +604,7 @@ router.post("/webhook", async (req, res) => {
 
     const orderRes = await fetch(`${SQUARE_BASE_URL}/v2/orders/${orderId}`, {
       headers: {
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${squareAccessToken}`,
         "Square-Version": SQUARE_VERSION,
       },
     });
