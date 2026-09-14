@@ -264,15 +264,148 @@ router.get("/oauth/callback", async (req, res) => {
   }
 });
 
-router.post("/create-payment-link", async (req, res) => {
+router.post("/create-payment-link", authMiddleware, async (req, res) => {
   try {
-    const { booking_id, payment_type, amount_cents } = req.body;
+    const { booking_id, payment_type } = req.body || {};
+    const driverId = req.user?.id;
 
-    if (!booking_id || !payment_type || !amount_cents) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!booking_id || !["deposit", "rental"].includes(payment_type)) {
+      return res.status(400).json({
+        error: "booking_id and valid payment_type are required",
+      });
     }
 
-    const idempotencyKey = crypto.randomUUID();
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select(
+        "id, host_id, driver_id, status, total_price_cents, deposit_amount_cents, payment_status, deposit_paid"
+      )
+      .eq("id", booking_id)
+      .maybeSingle();
+
+    if (bookingError) {
+      console.error("SQUARE BOOKING LOOKUP ERROR:", bookingError.message);
+      return res.status(500).json({ error: "Unable to load booking." });
+    }
+
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found." });
+    }
+
+    if (String(booking.driver_id) !== String(driverId)) {
+      return res.status(403).json({
+        error: "Only the booking driver can make this payment.",
+      });
+    }
+
+    if (payment_type === "deposit" && booking.deposit_paid === true) {
+      return res.status(409).json({ error: "Security deposit is already paid." });
+    }
+
+    if (
+      payment_type === "rental" &&
+      String(booking.payment_status || "").toLowerCase() === "paid"
+    ) {
+      return res.status(409).json({ error: "Rental payment is already paid." });
+    }
+
+    let squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
+    let squareLocationId = process.env.SQUARE_LOCATION_ID;
+
+    if (payment_type === "rental") {
+      const { data: hostProfile, error: hostProfileError } = await supabaseAdmin
+        .from("profiles")
+        .select(
+          "square_connection_status, square_merchant_id, square_location_id"
+        )
+        .eq("id", booking.host_id)
+        .maybeSingle();
+
+      if (hostProfileError) {
+        console.error(
+          "SQUARE HOST PROFILE LOOKUP ERROR:",
+          hostProfileError.message
+        );
+        return res.status(500).json({
+          error: "Unable to verify host payment account.",
+        });
+      }
+
+      if (
+        !hostProfile ||
+        hostProfile.square_connection_status !== "connected" ||
+        !hostProfile.square_merchant_id ||
+        !hostProfile.square_location_id
+      ) {
+        return res.status(409).json({
+          error: "Host has not connected Square yet.",
+        });
+      }
+
+      const { data: credentials, error: credentialError } = await supabaseAdmin
+        .from("square_host_credentials")
+        .select("access_token, refresh_token, token_expires_at")
+        .eq("host_id", booking.host_id)
+        .maybeSingle();
+
+      if (credentialError) {
+        console.error(
+          "SQUARE HOST CREDENTIAL LOOKUP ERROR:",
+          credentialError.message
+        );
+        return res.status(500).json({
+          error: "Unable to load host payment account.",
+        });
+      }
+
+      if (!credentials?.access_token) {
+        return res.status(409).json({
+          error: "Host Square authorization is unavailable.",
+        });
+      }
+
+      squareAccessToken = credentials.access_token;
+      squareLocationId = hostProfile.square_location_id;
+    }
+
+    if (!squareAccessToken || !squareLocationId) {
+      return res.status(500).json({
+        error: "Square payment configuration is unavailable.",
+      });
+    }
+
+    const depositAmountCents = Number(booking.deposit_amount_cents || 0);
+    const rentalSubtotalCents = Number(booking.total_price_cents || 0);
+    const driverFeeCents =
+      payment_type === "rental"
+        ? Math.round(rentalSubtotalCents * 0.08)
+        : 0;
+
+    const taxCents =
+      payment_type === "rental"
+        ? Math.round(rentalSubtotalCents * 0.07)
+        : 0;
+
+    const amountCents =
+      payment_type === "deposit"
+        ? depositAmountCents
+        : rentalSubtotalCents + driverFeeCents + taxCents;
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      return res.status(400).json({
+        error: "Booking payment amount is invalid.",
+      });
+    }
+
+    const hostFeeCents =
+      payment_type === "rental"
+        ? Math.round(rentalSubtotalCents * 0.08)
+        : 0;
+
+    const applicationFeeCents =
+      payment_type === "rental"
+        ? hostFeeCents + driverFeeCents
+        : 0;
 
     const lineItems =
       payment_type === "deposit"
@@ -281,7 +414,7 @@ router.post("/create-payment-link", async (req, res) => {
               name: "Security Deposit",
               quantity: "1",
               base_price_money: {
-                amount: Number(amount_cents),
+                amount: depositAmountCents,
                 currency: "USD",
               },
             },
@@ -291,41 +424,29 @@ router.post("/create-payment-link", async (req, res) => {
               name: "Rental Charge",
               quantity: "1",
               base_price_money: {
-                amount: Number(req.body.rental_cents || amount_cents),
+                amount: rentalSubtotalCents,
                 currency: "USD",
               },
             },
-            ...(Number(req.body.bonzah_fee_cents || 0) > 0
+            ...(driverFeeCents > 0
               ? [
                   {
-                    name: "Rental Protection",
+                    name: "GigRide Service Fee",
                     quantity: "1",
                     base_price_money: {
-                      amount: Number(req.body.bonzah_fee_cents),
+                      amount: driverFeeCents,
                       currency: "USD",
                     },
                   },
                 ]
               : []),
-            ...(Number(req.body.gigride_protection_fee_cents || 0) > 0
-              ? [
-                  {
-                    name: "GigRide Protection Fee",
-                    quantity: "1",
-                    base_price_money: {
-                      amount: Number(req.body.gigride_protection_fee_cents),
-                      currency: "USD",
-                    },
-                  },
-                ]
-              : []),
-            ...(Number(req.body.tax_cents || 0) > 0
+            ...(taxCents > 0
               ? [
                   {
                     name: "Taxes",
                     quantity: "1",
                     base_price_money: {
-                      amount: Number(req.body.tax_cents),
+                      amount: taxCents,
                       currency: "USD",
                     },
                   },
@@ -333,42 +454,61 @@ router.post("/create-payment-link", async (req, res) => {
               : []),
           ];
 
+    const checkoutOptions = {
+      redirect_url:
+        process.env.APP_DEEP_LINK || "gigride://square-success",
+    };
+
+    if (applicationFeeCents > 0) {
+      checkoutOptions.app_fee_money = {
+        amount: applicationFeeCents,
+        currency: "USD",
+      };
+    }
+
     const response = await fetch(
       `${SQUARE_BASE_URL}/v2/online-checkout/payment-links`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${squareAccessToken}`,
           "Content-Type": "application/json",
           "Square-Version": SQUARE_VERSION,
         },
         body: JSON.stringify({
-          idempotency_key: idempotencyKey,
+          idempotency_key: crypto.createHash("sha256").update(`${booking.id}:${payment_type}`).digest("hex"),
           order: {
-            location_id: process.env.SQUARE_LOCATION_ID,
+            location_id: squareLocationId,
             line_items: lineItems,
             metadata: {
-              booking_id: String(booking_id),
+              booking_id: String(booking.id),
               payment_type: String(payment_type),
             },
           },
-          checkout_options: {
-            redirect_url:
-              process.env.APP_DEEP_LINK || "gigride://square-success",
-          },
+          checkout_options: checkoutOptions,
         }),
       }
     );
 
     const text = await response.text();
-    const json = text ? JSON.parse(text) : {};
+
+    let json = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = {};
+    }
 
     if (!response.ok) {
+      console.error(
+        "SQUARE CONNECTED SELLER PAYMENT LINK ERROR:",
+        json?.errors?.[0]?.code || response.status
+      );
+
       return res.status(response.status).json({
         error:
           json?.errors?.[0]?.detail ||
           "Failed to create Square payment link",
-        square: json,
       });
     }
 
@@ -377,8 +517,10 @@ router.post("/create-payment-link", async (req, res) => {
       checkout_url: json?.payment_link?.url,
     });
   } catch (e) {
-    console.error("SQUARE CREATE PAYMENT LINK ERROR:", e);
-    return res.status(500).json({ error: e.message });
+    console.error("SQUARE CREATE PAYMENT LINK ERROR:", e.message);
+    return res.status(500).json({
+      error: "Unable to create Square payment link.",
+    });
   }
 });
 
