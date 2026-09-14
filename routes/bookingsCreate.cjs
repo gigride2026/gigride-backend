@@ -133,6 +133,17 @@ if (
 
 const rentalDays = tripDays(start_date, end_date);
 
+const depositAmountCents =
+  rentalDays >= 30
+    ? 50000
+    : rentalDays >= 15
+    ? 40000
+    : rentalDays >= 8
+    ? 30000
+    : rentalDays >= 4
+    ? 25000
+    : 20000;
+
 const serverRentalType =
   rentalDays >= 30
     ? "monthly"
@@ -234,6 +245,7 @@ if (vehicle.host_id === driverId) {
         start_date,
         end_date,
         total_price_cents: finalTotal,
+        deposit_amount_cents: depositAmountCents,
         insurance_provider: vehicle.insurance_enabled
   ? vehicle.insurance_provider || "abi"
   : null,
