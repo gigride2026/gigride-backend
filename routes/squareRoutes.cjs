@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const authMiddleware = require("../middlewares/auth.cjs");
 
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
@@ -9,6 +10,221 @@ const SQUARE_BASE_URL =
     : "https://connect.squareupsandbox.com";
 
 const SQUARE_VERSION = "2025-04-16";
+
+
+router.get("/connect", authMiddleware, async (req, res) => {
+  try {
+    const hostId = req.user.id;
+
+    if (!process.env.SQUARE_APPLICATION_ID) {
+      return res.status(500).json({
+        error: "Square OAuth is not configured.",
+      });
+    }
+
+    const state = crypto.randomBytes(32).toString("hex");
+    const stateHash = crypto
+      .createHash("sha256")
+      .update(state)
+      .digest("hex");
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { error: stateError } = await supabaseAdmin
+      .from("square_oauth_states")
+      .insert({
+        state_hash: stateHash,
+        host_id: hostId,
+        expires_at: expiresAt,
+      });
+
+    if (stateError) {
+      console.error("SQUARE OAUTH STATE ERROR:", stateError.message);
+      return res.status(500).json({
+        error: "Unable to start Square connection.",
+      });
+    }
+
+    const params = new URLSearchParams({
+      client_id: process.env.SQUARE_APPLICATION_ID,
+      scope: [
+        "MERCHANT_PROFILE_READ",
+        "ORDERS_READ",
+        "ORDERS_WRITE",
+        "PAYMENTS_READ",
+        "PAYMENTS_WRITE",
+        "PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS",
+      ].join(" "),
+      session: "false",
+      state,
+    });
+
+    return res.json({
+      authorization_url: `${SQUARE_BASE_URL}/oauth2/authorize?${params.toString()}`,
+    });
+  } catch (error) {
+    console.error("SQUARE OAUTH CONNECT ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to start Square connection.",
+    });
+  }
+});
+
+
+router.get("/oauth/callback", async (req, res) => {
+  try {
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+      console.error("SQUARE OAUTH DENIED:", error, error_description || "");
+      return res.status(400).send("Square connection was cancelled or denied.");
+    }
+
+    if (!code || !state) {
+      return res.status(400).send("Missing Square authorization information.");
+    }
+
+    if (
+      !process.env.SQUARE_APPLICATION_ID ||
+      !process.env.SQUARE_APPLICATION_SECRET
+    ) {
+      return res.status(500).send("Square OAuth is not configured.");
+    }
+
+    const stateHash = crypto
+      .createHash("sha256")
+      .update(String(state))
+      .digest("hex");
+
+    const { data: oauthState, error: stateLookupError } = await supabaseAdmin
+      .from("square_oauth_states")
+      .select("host_id, expires_at")
+      .eq("state_hash", stateHash)
+      .maybeSingle();
+
+    if (stateLookupError) {
+      console.error("SQUARE OAUTH STATE LOOKUP ERROR:", stateLookupError.message);
+      return res.status(500).send("Unable to verify Square connection.");
+    }
+
+    if (!oauthState) {
+      return res.status(400).send("Invalid or already-used Square connection.");
+    }
+
+    if (new Date(oauthState.expires_at).getTime() <= Date.now()) {
+      await supabaseAdmin
+        .from("square_oauth_states")
+        .delete()
+        .eq("state_hash", stateHash);
+
+      return res.status(400).send("Square connection expired. Please try again.");
+    }
+
+    const { error: consumeStateError } = await supabaseAdmin
+      .from("square_oauth_states")
+      .delete()
+      .eq("state_hash", stateHash);
+
+    if (consumeStateError) {
+      console.error(
+        "SQUARE OAUTH STATE CONSUME ERROR:",
+        consumeStateError.message
+      );
+      return res.status(500).send("Unable to verify Square connection.");
+    }
+
+    const tokenResponse = await fetch(`${SQUARE_BASE_URL}/oauth2/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Square-Version": SQUARE_VERSION,
+      },
+      body: JSON.stringify({
+        client_id: process.env.SQUARE_APPLICATION_ID,
+        client_secret: process.env.SQUARE_APPLICATION_SECRET,
+        code: String(code),
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokenJson = await tokenResponse.json();
+
+    if (!tokenResponse.ok || !tokenJson?.access_token) {
+      console.error(
+        "SQUARE OAUTH TOKEN ERROR:",
+        tokenJson?.errors?.[0]?.code || "token_exchange_failed"
+      );
+      return res.status(400).send("Square authorization could not be completed.");
+    }
+
+    const locationResponse = await fetch(
+      `${SQUARE_BASE_URL}/v2/locations/main`,
+      {
+        headers: {
+          Authorization: `Bearer ${tokenJson.access_token}`,
+          "Square-Version": SQUARE_VERSION,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const locationJson = await locationResponse.json();
+
+    if (!locationResponse.ok || !locationJson?.location?.id) {
+      console.error(
+        "SQUARE LOCATION ERROR:",
+        locationJson?.errors?.[0]?.code || "location_lookup_failed"
+      );
+      return res.status(400).send(
+        "Square connected, but the seller location could not be verified."
+      );
+    }
+
+    const hostId = oauthState.host_id;
+    const now = new Date().toISOString();
+
+    const { error: credentialError } = await supabaseAdmin
+      .from("square_host_credentials")
+      .upsert(
+        {
+          host_id: hostId,
+          access_token: tokenJson.access_token,
+          refresh_token: tokenJson.refresh_token || null,
+          token_expires_at: tokenJson.expires_at || null,
+          updated_at: now,
+        },
+        { onConflict: "host_id" }
+      );
+
+    if (credentialError) {
+      console.error(
+        "SQUARE CREDENTIAL SAVE ERROR:",
+        credentialError.message
+      );
+      return res.status(500).send("Unable to save Square connection.");
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        square_merchant_id: tokenJson.merchant_id || null,
+        square_location_id: locationJson.location.id,
+        square_connected_at: now,
+        square_connection_status: "connected",
+      })
+      .eq("id", hostId);
+
+    if (profileError) {
+      console.error("SQUARE PROFILE UPDATE ERROR:", profileError.message);
+      return res.status(500).send("Unable to finish Square connection.");
+    }
+
+    return res.redirect("gigride://square-success");
+  } catch (error) {
+    console.error("SQUARE OAUTH CALLBACK ERROR:", error.message);
+    return res.status(500).send("Unable to complete Square connection.");
+  }
+});
 
 router.post("/create-payment-link", async (req, res) => {
   try {
