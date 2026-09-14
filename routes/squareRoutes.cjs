@@ -71,6 +71,44 @@ router.get("/connect", authMiddleware, async (req, res) => {
 });
 
 
+router.get("/connection-status", authMiddleware, async (req, res) => {
+  try {
+    const hostId = req.user.id;
+
+    const { data: profile, error } = await supabaseAdmin
+      .from("profiles")
+      .select(
+        "square_connection_status, square_connected_at, square_merchant_id, square_location_id"
+      )
+      .eq("id", hostId)
+      .single();
+
+    if (error) {
+      console.error("SQUARE CONNECTION STATUS ERROR:", error.message);
+      return res.status(500).json({
+        error: "Unable to check Square connection.",
+      });
+    }
+
+    const connected =
+      profile?.square_connection_status === "connected" &&
+      !!profile?.square_merchant_id &&
+      !!profile?.square_location_id;
+
+    return res.json({
+      connected,
+      status: profile?.square_connection_status || "not_connected",
+      connected_at: profile?.square_connected_at || null,
+    });
+  } catch (error) {
+    console.error("SQUARE CONNECTION STATUS ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to check Square connection.",
+    });
+  }
+});
+
+
 router.get("/oauth/callback", async (req, res) => {
   try {
     const { code, state, error, error_description } = req.query;
