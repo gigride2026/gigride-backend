@@ -644,11 +644,23 @@ router.post("/webhook", async (req, res) => {
     }
 
     
+    const SQUARE_PLATFORM_MERCHANT_ID =
+      process.env.SQUARE_MERCHANT_ID || "MLYM62K90C573";
+
     let squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
+    let hostProfile = null;
     const eventMerchantId = String(event?.merchant_id || "").trim();
 
-    if (eventMerchantId) {
-      const { data: hostProfile, error: hostLookupError } = await supabaseAdmin
+    if (!eventMerchantId) {
+      console.error("SQUARE WEBHOOK ERROR: Missing merchant ID");
+      return res.json({ ok: true, ignored: "Missing merchant ID" });
+    }
+
+    const isPlatformMerchant =
+      eventMerchantId === SQUARE_PLATFORM_MERCHANT_ID;
+
+    if (!isPlatformMerchant) {
+      const { data: foundHostProfile, error: hostLookupError } = await supabaseAdmin
         .from("profiles")
         .select("id")
         .eq("square_merchant_id", eventMerchantId)
@@ -656,34 +668,39 @@ router.post("/webhook", async (req, res) => {
 
       if (hostLookupError) {
         console.error("SQUARE WEBHOOK HOST LOOKUP ERROR:", hostLookupError.message);
-        return res.json({ ok: true, ignored: "Host lookup failed" });
+        return res.status(500).json({ error: "Host lookup failed" });
       }
 
-      if (hostProfile?.id) {
-        const { data: credentials, error: credentialError } = await supabaseAdmin
-          .from("square_host_credentials")
-          .select("access_token, refresh_token, token_expires_at")
-          .eq("host_id", hostProfile.id)
-          .maybeSingle();
+      hostProfile = foundHostProfile;
 
-        if (credentialError || !credentials?.access_token) {
-          console.error(
-            "SQUARE WEBHOOK HOST CREDENTIAL ERROR:",
-            credentialError?.message || "Missing host Square access token"
-          );
-          return res.json({ ok: true, ignored: "Host Square credentials unavailable" });
-        }
+      if (!hostProfile?.id) {
+        console.error("SQUARE WEBHOOK UNKNOWN MERCHANT:", eventMerchantId);
+        return res.json({ ok: true, ignored: "Unknown Square merchant" });
+      }
 
-        squareAccessToken = await getValidSquareHostAccessToken(
-          hostProfile.id,
-          credentials
+      const { data: credentials, error: credentialError } = await supabaseAdmin
+        .from("square_host_credentials")
+        .select("access_token, refresh_token, token_expires_at")
+        .eq("host_id", hostProfile.id)
+        .maybeSingle();
+
+      if (credentialError || !credentials?.access_token) {
+        console.error(
+          "SQUARE WEBHOOK HOST CREDENTIAL ERROR:",
+          credentialError?.message || "Missing host Square access token"
         );
+        return res.status(500).json({ error: "Host Square credentials unavailable" });
       }
+
+      squareAccessToken = await getValidSquareHostAccessToken(
+        hostProfile.id,
+        credentials
+      );
     }
 
     if (!squareAccessToken) {
       console.error("SQUARE WEBHOOK ERROR: No Square access token available");
-      return res.json({ ok: true, ignored: "Square credentials unavailable" });
+      return res.status(500).json({ error: "Square credentials unavailable" });
     }
 
 const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
@@ -697,7 +714,7 @@ const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
 
     if (!paymentRes.ok) {
       console.log("SQUARE PAYMENT FETCH ERROR:", paymentJson);
-      return res.json({ ok: true, ignored: "Payment fetch failed" });
+      return res.status(500).json({ error: "Payment fetch failed" });
     }
 
     const payment = paymentJson?.payment;
@@ -734,76 +751,155 @@ const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
       return res.json({ ok: true, ignored: "Missing booking metadata" });
     }
 
-    const update =
-  paymentType === "deposit"
-    ? {
-        status: "deposit_paid",
-        deposit_paid: true,
-        deposit_paid_at: new Date().toISOString(),
+    if (!["deposit", "rental"].includes(paymentType)) {
+      console.error("SQUARE WEBHOOK INVALID PAYMENT TYPE:", paymentType);
+      return res.json({ ok: true, ignored: "Invalid payment type" });
+    }
+
+    if (!eventMerchantId) {
+      console.error("SQUARE WEBHOOK ERROR: Missing merchant ID");
+      return res.json({ ok: true, ignored: "Missing merchant ID" });
+    }
+
+    const { data: booking, error: bookingLookupError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, host_id, deposit_amount_cents, total_price_cents")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bookingLookupError) {
+      console.error("SQUARE WEBHOOK BOOKING LOOKUP ERROR:", bookingLookupError.message);
+      return res.status(500).json({ error: "Booking lookup failed" });
+    }
+
+    if (!booking) {
+      return res.json({ ok: true, ignored: "Booking not found" });
+    }
+
+    if (paymentType === "deposit") {
+      if (!isPlatformMerchant) {
+        console.error("SQUARE WEBHOOK DEPOSIT MERCHANT MISMATCH:", {
+          bookingId,
+          eventMerchantId,
+          expectedMerchantId: SQUARE_PLATFORM_MERCHANT_ID,
+        });
+
+        return res.json({
+          ok: true,
+          ignored: "Deposit payment did not come from platform merchant",
+        });
       }
-    : {
-        payment_status: "paid",
-        paid_at: new Date().toISOString(),
-      };
+    } else {
+      if (!hostProfile?.id) {
+        console.error("SQUARE WEBHOOK RENTAL HOST MISSING:", {
+          bookingId,
+          eventMerchantId,
+        });
 
-const { data: updatedBooking, error } = await supabaseAdmin
-  .from("bookings")
-  .update(update)
-  .eq("id", bookingId)
-  .select("*")
-  .maybeSingle();
+        return res.json({
+          ok: true,
+          ignored: "Rental payment merchant is not a connected host",
+        });
+      }
 
-if (error) throw error;
+      if (String(booking.host_id) !== String(hostProfile.id)) {
+        console.error("SQUARE WEBHOOK HOST MISMATCH:", {
+          bookingId,
+          bookingHostId: booking.host_id,
+          squareHostId: hostProfile.id,
+          eventMerchantId,
+        });
 
-if (paymentType === "rental" && updatedBooking) {
-  const grossCents = Number(
-    updatedBooking.rental_subtotal_cents ||
-      updatedBooking.total_price_cents ||
-      0
-  );
+        return res.json({
+          ok: true,
+          ignored: "Booking host does not match Square merchant",
+        });
+      }
+    }
 
-  const platformFeeCents = Math.round(grossCents * 0.08);
-  const hostPayoutCents = Math.max(0, grossCents - platformFeeCents);
+    const rentalSubtotalCents = Number(booking.total_price_cents || 0);
 
-  const payoutAvailableAt = updatedBooking.end_date
-    ? new Date(
-        new Date(updatedBooking.end_date).getTime() + 24 * 60 * 60 * 1000
-      ).toISOString()
-    : null;
+    const expectedRentalAmountCents =
+      rentalSubtotalCents +
+      Math.round(rentalSubtotalCents * 0.08) +
+      Math.round(rentalSubtotalCents * 0.07);
 
-  const { error: payoutError } = await supabaseAdmin
-    .from("host_payouts")
-    .upsert(
-      {
-        booking_id: updatedBooking.id,
-        host_id: updatedBooking.host_id,
-        vehicle_id: updatedBooking.vehicle_id,
-        period_start: updatedBooking.start_date || null,
-        period_end: updatedBooking.end_date || null,
-        gross_amount_cents: grossCents,
-        application_fee_cents: platformFeeCents,
-        net_amount_cents: hostPayoutCents,
-        rental_subtotal_cents: grossCents,
-        host_fee_cents: platformFeeCents,
-        host_payout_cents: hostPayoutCents,
-        payout_available_at: payoutAvailableAt,
-        status: "pending",
-      },
-      { onConflict: "booking_id" }
-    );
+    const expectedAmountCents =
+      paymentType === "deposit"
+        ? Number(booking.deposit_amount_cents || 0)
+        : expectedRentalAmountCents;
 
-  if (payoutError) {
-    console.error("HOST PAYOUT UPSERT ERROR:", payoutError);
-  }
-}
+    const paidAmountCents = Number(payment?.amount_money?.amount || 0);
+    const paidCurrency = String(payment?.amount_money?.currency || "").toUpperCase();
 
-console.log("SQUARE PAYMENT APPLIED:", {
-  bookingId,
-  paymentType,
-  paymentId,
-});
+    if (!Number.isFinite(expectedAmountCents) || expectedAmountCents <= 0) {
+      console.error("SQUARE WEBHOOK INVALID EXPECTED AMOUNT:", {
+        bookingId,
+        paymentType,
+        expectedAmountCents,
+      });
+      return res.status(500).json({ error: "Invalid booking payment amount" });
+    }
 
-return res.json({ ok: true });
+    if (paidCurrency !== "USD" || paidAmountCents !== expectedAmountCents) {
+      console.error("SQUARE WEBHOOK PAYMENT AMOUNT MISMATCH:", {
+        bookingId,
+        paymentType,
+        paymentId,
+        expectedAmountCents,
+        paidAmountCents,
+        paidCurrency,
+      });
+
+      return res.json({
+        ok: true,
+        ignored: "Payment amount or currency mismatch",
+      });
+    }
+
+    const { data: paymentResult, error: paymentApplyError } =
+      await supabaseAdmin.rpc("apply_square_booking_payment", {
+        p_booking_id: bookingId,
+        p_payment_type: paymentType,
+        p_payment_id: paymentId,
+        p_amount_cents: paidAmountCents,
+      });
+
+    if (paymentApplyError) {
+      console.error("SQUARE PAYMENT APPLY ERROR:", {
+        bookingId,
+        paymentType,
+        paymentId,
+        error: paymentApplyError.message,
+      });
+
+      throw paymentApplyError;
+    }
+
+    if (paymentResult?.duplicate === true) {
+      console.log("SQUARE PAYMENT ALREADY APPLIED:", {
+        bookingId,
+        paymentType,
+        paymentId,
+      });
+
+      return res.json({
+        ok: true,
+        duplicate: true,
+      });
+    }
+
+    console.log("SQUARE PAYMENT APPLIED:", {
+      bookingId,
+      paymentType,
+      paymentId,
+      amountCents: paidAmountCents,
+    });
+
+    return res.json({
+      ok: true,
+      duplicate: false,
+    });
   } catch (e) {
     console.error("SQUARE WEBHOOK ERROR:", e);
     return res.status(500).json({ error: e.message });
