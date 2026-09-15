@@ -12,6 +12,75 @@ const SQUARE_BASE_URL =
 const SQUARE_VERSION = "2025-04-16";
 
 
+async function getValidSquareHostAccessToken(hostId, credentials) {
+  if (!credentials?.access_token) {
+    throw new Error("Square host access token is missing");
+  }
+
+  const expiresAt = credentials.token_expires_at
+    ? new Date(credentials.token_expires_at).getTime()
+    : null;
+
+  // Refresh when expired or within 5 minutes of expiration.
+  const shouldRefresh =
+    expiresAt !== null &&
+    Number.isFinite(expiresAt) &&
+    expiresAt <= Date.now() + 5 * 60 * 1000;
+
+  if (!shouldRefresh) {
+    return credentials.access_token;
+  }
+
+  if (!credentials.refresh_token) {
+    throw new Error("Square host refresh token is missing");
+  }
+
+  const response = await fetch(`${SQUARE_BASE_URL}/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Square-Version": SQUARE_VERSION,
+    },
+    body: JSON.stringify({
+      client_id: process.env.SQUARE_APPLICATION_ID,
+      client_secret: process.env.SQUARE_APPLICATION_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: credentials.refresh_token,
+    }),
+  });
+
+  const json = await response.json();
+
+  if (!response.ok || !json?.access_token) {
+    console.error(
+      "SQUARE TOKEN REFRESH ERROR:",
+      json?.errors?.[0]?.code || "refresh_failed"
+    );
+    throw new Error("Square host authorization needs to be renewed");
+  }
+
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("square_host_credentials")
+    .update({
+      access_token: json.access_token,
+      refresh_token: json.refresh_token || credentials.refresh_token,
+      token_expires_at: json.expires_at || null,
+      updated_at: now,
+    })
+    .eq("host_id", hostId);
+
+  if (error) {
+    console.error("SQUARE TOKEN REFRESH SAVE ERROR:", error.message);
+    throw new Error("Unable to save refreshed Square authorization");
+  }
+
+  return json.access_token;
+}
+
+
+
 router.get("/connect", authMiddleware, async (req, res) => {
   try {
     const hostId = req.user.id;
@@ -364,7 +433,10 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
         });
       }
 
-      squareAccessToken = credentials.access_token;
+      squareAccessToken = await getValidSquareHostAccessToken(
+        booking.host_id,
+        credentials
+      );
       squareLocationId = hostProfile.square_location_id;
     }
 
@@ -555,7 +627,7 @@ router.post("/webhook", async (req, res) => {
       if (hostProfile?.id) {
         const { data: credentials, error: credentialError } = await supabaseAdmin
           .from("square_host_credentials")
-          .select("access_token")
+          .select("access_token, refresh_token, token_expires_at")
           .eq("host_id", hostProfile.id)
           .maybeSingle();
 
@@ -567,7 +639,10 @@ router.post("/webhook", async (req, res) => {
           return res.json({ ok: true, ignored: "Host Square credentials unavailable" });
         }
 
-        squareAccessToken = credentials.access_token;
+        squareAccessToken = await getValidSquareHostAccessToken(
+          hostProfile.id,
+          credentials
+        );
       }
     }
 
