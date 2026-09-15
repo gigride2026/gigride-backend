@@ -598,6 +598,41 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
 
 router.post("/webhook", async (req, res) => {
   try {
+    // Verify this webhook actually came from Square.
+    const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+    const notificationUrl = process.env.SQUARE_WEBHOOK_URL;
+    const squareSignature = req.get("x-square-hmacsha256-signature");
+    const rawBody = req.rawBody;
+
+    if (!signatureKey || !notificationUrl) {
+      console.error("SQUARE WEBHOOK SIGNATURE CONFIG MISSING");
+      return res.status(500).json({ error: "Webhook signature config missing" });
+    }
+
+    if (!squareSignature || !rawBody) {
+      console.warn("SQUARE WEBHOOK SIGNATURE OR RAW BODY MISSING");
+      return res.status(403).json({ error: "Invalid Square webhook signature" });
+    }
+
+    const expectedSignature = crypto
+      .createHmac("sha256", signatureKey)
+      .update(notificationUrl + rawBody.toString("utf8"))
+      .digest("base64");
+
+    const receivedBuffer = Buffer.from(squareSignature, "utf8");
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+
+    const validSignature =
+      receivedBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+
+    if (!validSignature) {
+      console.warn("INVALID SQUARE WEBHOOK SIGNATURE");
+      return res.status(403).json({ error: "Invalid Square webhook signature" });
+    }
+
+    console.log("VALID SQUARE WEBHOOK SIGNATURE");
+
     const event = req.body;
 
     console.log("SQUARE WEBHOOK EVENT:", event?.type);
