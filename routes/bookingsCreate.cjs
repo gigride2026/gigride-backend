@@ -2,6 +2,67 @@ const express = require("express");
 const router = express.Router();
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const { getMileageSnapshot } = require("../utils/mileage.cjs");
+const { DateTime } = require("luxon");
+function parseBookingDateTime(dateValue, timeValue, timezone) {
+  if (!dateValue || !timeValue || !timezone) return null;
+
+  const normalizedTime = String(timeValue)
+    .trim()
+    .replace(/[\u00A0\u202F]/g, " ")
+    .replace(/\s+/g, " ");
+
+  const input = `${String(dateValue).trim()} ${normalizedTime}`;
+
+  const formats = [
+    "yyyy-MM-dd h:mm a",
+    "yyyy-MM-dd hh:mm a",
+    "yyyy-MM-dd H:mm",
+    "yyyy-MM-dd HH:mm",
+  ];
+
+  for (const format of formats) {
+    const result = DateTime.fromFormat(input, format, {
+      zone: timezone,
+      locale: "en-US",
+      setZone: true,
+    });
+
+    const requestedWallTime = DateTime.fromFormat(input, format, {
+      zone: "UTC",
+      locale: "en-US",
+      setZone: true,
+    });
+
+    if (!result.isValid || !requestedWallTime.isValid) {
+      continue;
+    }
+
+    const sameWallTime =
+      result.year === requestedWallTime.year &&
+      result.month === requestedWallTime.month &&
+      result.day === requestedWallTime.day &&
+      result.hour === requestedWallTime.hour &&
+      result.minute === requestedWallTime.minute;
+
+    // Reject nonexistent local times during the spring DST transition.
+    if (!sameWallTime) {
+      continue;
+    }
+
+    // Reject ambiguous local times during the fall DST transition.
+    if (
+      typeof result.getPossibleOffsets === "function" &&
+      result.getPossibleOffsets().length !== 1
+    ) {
+      continue;
+    }
+
+    return result;
+  }
+
+  return null;
+}
+
 function tripDays(startDate, endDate) {
   if (!startDate || !endDate) return 1;
 
@@ -131,6 +192,63 @@ if (
   });
 }
 
+if (!pickup_time || !dropoff_time) {
+  return res.status(400).json({
+    error: "Pickup time and drop-off time are required.",
+  });
+}
+
+const vehicleTimezone = String(vehicle.timezone || "").trim();
+
+if (!vehicleTimezone || !DateTime.local().setZone(vehicleTimezone).isValid) {
+  console.error("Invalid vehicle timezone:", {
+    vehicle_id,
+    timezone: vehicle.timezone,
+  });
+
+  return res.status(500).json({
+    error: "Vehicle timezone is not configured correctly.",
+  });
+}
+
+const pickupAt = parseBookingDateTime(
+  start_date,
+  pickup_time,
+  vehicleTimezone
+);
+
+const dropoffAt = parseBookingDateTime(
+  end_date,
+  dropoff_time,
+  vehicleTimezone
+);
+
+if (!pickupAt || !dropoffAt) {
+  return res.status(400).json({
+    error: "Invalid pickup or drop-off time.",
+  });
+}
+
+if (dropoffAt.toMillis() <= pickupAt.toMillis()) {
+  return res.status(400).json({
+    error: "Drop-off must be after pickup.",
+  });
+}
+
+const advanceNoticeMinutes = Number(
+  vehicle.minimum_advance_notice_minutes || 0
+);
+
+const earliestPickupAt = DateTime.now()
+  .setZone(vehicleTimezone)
+  .plus({ minutes: advanceNoticeMinutes });
+
+if (pickupAt.toMillis() < earliestPickupAt.toMillis()) {
+  return res.status(400).json({
+    error: `This vehicle requires at least ${advanceNoticeMinutes} minutes of advance notice.`,
+  });
+}
+
 const rentalDays = tripDays(start_date, end_date);
 
 const depositAmountCents =
@@ -182,20 +300,38 @@ const finalTotal =
   Number(mileage.unlimited_miles_fee_cents || 0) +
   insuranceTotalCents;
 
-   const { data: bookingConflicts, error: bookingConflictError } = await supabaseAdmin
-  .from("bookings")
-  .select("id,start_date,end_date,status")
-  .eq("vehicle_id", vehicle_id)
-  .in("status", [
-  "requested",
-  "pending",
-  "approved",
-  "deposit_paid",
-  "pickup_confirmed",
-  "active",
-])
-  .lte("start_date", end_date)
-  .gte("end_date", start_date);
+   const turnaroundMinutes = Number(
+  vehicle.turnaround_minutes || 0
+);
+
+const bookingConflictsQuery = supabaseAdmin
+    .from("bookings")
+    .select("id,start_date,end_date,pickup_time,dropoff_time,status")
+    .eq("vehicle_id", vehicle_id)
+    .in("status", [
+      "requested",
+      "pending",
+      "approved",
+      "deposit_paid",
+      "pickup_confirmed",
+      "active",
+      "completed",
+    ]);
+
+const turnaroundDays = Math.ceil(turnaroundMinutes / (24 * 60));
+
+const candidateStartDate = pickupAt
+  .minus({ days: turnaroundDays })
+  .toISODate();
+
+const candidateEndDate = dropoffAt
+  .plus({ days: turnaroundDays })
+  .toISODate();
+
+const { data: bookingConflicts, error: bookingConflictError } =
+  await bookingConflictsQuery
+    .lte("start_date", candidateEndDate)
+    .gte("end_date", candidateStartDate);
 
 if (bookingConflictError) {
   return res.status(500).json({
@@ -203,10 +339,46 @@ if (bookingConflictError) {
   });
 }
 
-if (bookingConflicts?.length) {
-  return res.status(400).json({
-    error: "Vehicle is unavailable for selected dates.",
+for (const existingBooking of bookingConflicts || []) {
+  const existingPickupAt = parseBookingDateTime(
+    existingBooking.start_date,
+    existingBooking.pickup_time,
+    vehicleTimezone
+  );
+
+  const existingDropoffAt = parseBookingDateTime(
+    existingBooking.end_date,
+    existingBooking.dropoff_time,
+    vehicleTimezone
+  );
+
+  if (!existingPickupAt || !existingDropoffAt) {
+    console.error("Existing booking has invalid date/time:", {
+      booking_id: existingBooking.id,
+    });
+
+    return res.status(500).json({
+      error: "Vehicle availability could not be verified.",
+    });
+  }
+
+  const existingAvailableAgainAt = existingDropoffAt.plus({
+    minutes: turnaroundMinutes,
   });
+
+  const newAvailableAgainAt = dropoffAt.plus({
+    minutes: turnaroundMinutes,
+  });
+
+  const conflicts =
+    pickupAt.toMillis() < existingAvailableAgainAt.toMillis() &&
+    newAvailableAgainAt.toMillis() > existingPickupAt.toMillis();
+
+  if (conflicts) {
+    return res.status(400).json({
+      error: "Vehicle is unavailable for the selected pickup and drop-off times.",
+    });
+  }
 }
 
 const { data: blockedDates, error: blockedDatesError } = await supabaseAdmin
@@ -244,6 +416,8 @@ if (vehicle.host_id === driverId) {
         rental_type: serverRentalType,
         start_date,
         end_date,
+        pickup_time,
+        dropoff_time,
         total_price_cents: finalTotal,
         deposit_amount_cents: depositAmountCents,
         insurance_provider: vehicle.insurance_enabled
