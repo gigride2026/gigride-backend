@@ -156,6 +156,48 @@ if (authError || !user) {
 
 const driverId = user.id;
 
+// 👤 Require a complete driver profile before allowing a booking request
+const { data: driverProfile, error: driverProfileError } =
+  await supabaseAdmin
+    .from("profiles")
+    .select("full_name, phone, city, gig_platforms, avatar_url, bio, is_driver")
+    .eq("id", driverId)
+    .maybeSingle();
+
+if (driverProfileError) {
+  console.error(
+    "DRIVER PROFILE LOOKUP ERROR:",
+    driverProfileError.message
+  );
+
+  return res.status(500).json({
+    error: "Unable to verify your driver profile.",
+  });
+}
+
+const hasGigPlatform =
+  Array.isArray(driverProfile?.gig_platforms) &&
+  driverProfile.gig_platforms.some(
+    (platform) => String(platform || "").trim().length > 0
+  );
+
+const driverProfileComplete =
+  driverProfile?.is_driver === true &&
+  String(driverProfile?.full_name || "").trim().length > 0 &&
+  String(driverProfile?.phone || "").trim().length > 0 &&
+  String(driverProfile?.city || "").trim().length > 0 &&
+  hasGigPlatform &&
+  String(driverProfile?.avatar_url || "").trim().length > 0 &&
+  String(driverProfile?.bio || "").trim().length >= 20;
+
+if (!driverProfileComplete) {
+  return res.status(403).json({
+    error:
+      "Complete your driver profile before requesting a booking. Add your name, phone number, city, gig platform, profile photo, and a short bio.",
+    code: "DRIVER_PROFILE_INCOMPLETE",
+  });
+}
+
     // 🔍 fetch vehicle mileage settings
     const { data: vehicle, error: vehicleErr } = await supabaseAdmin
       .from("vehicles")
