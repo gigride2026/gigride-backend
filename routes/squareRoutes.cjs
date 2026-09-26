@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require("crypto");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
+const { notifyUser } = require("../utils/pushNotifications.cjs");
 
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
@@ -895,6 +896,72 @@ const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
       paymentId,
       amountCents: paidAmountCents,
     });
+
+    // 🔔 Owner-only financial notification
+try {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (ownerUserId) {
+    const money = (cents) =>
+      (Number(cents || 0) / 100).toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+
+    if (paymentType === "rental") {
+      const driverFeeCents = Math.round(rentalSubtotalCents * 0.08);
+      const hostFeeCents = Math.round(rentalSubtotalCents * 0.08);
+      const platformRevenueCents = driverFeeCents + hostFeeCents;
+
+      await notifyUser({
+        supabaseAdmin,
+        userId: ownerUserId,
+        title: "💰 GigRide Rental Payment Received",
+        body:
+          `${money(paidAmountCents)} collected • ` +
+          `${money(platformRevenueCents)} GigRide fees • ` +
+          `Booking ${String(bookingId).slice(0, 8)}`,
+        data: {
+          type: "owner_rental_payment_received",
+          bookingId,
+          paymentId,
+          paidAmountCents,
+          rentalSubtotalCents,
+          driverFeeCents,
+          hostFeeCents,
+          platformRevenueCents,
+        },
+      });
+    } else if (paymentType === "deposit") {
+      await notifyUser({
+        supabaseAdmin,
+        userId: ownerUserId,
+        title: "🔒 Security Deposit Received",
+        body:
+          `${money(paidAmountCents)} deposit collected • ` +
+          `Booking ${String(bookingId).slice(0, 8)}`,
+        data: {
+          type: "owner_deposit_received",
+          bookingId,
+          paymentId,
+          depositAmountCents: paidAmountCents,
+        },
+      });
+    }
+  } else {
+    console.warn(
+      "⚠️ GIGRIDE_OWNER_USER_ID is not configured; owner payment push skipped."
+    );
+  }
+} catch (pushErr) {
+  // A push failure must never cause Square to retry an already-applied payment.
+  console.error(
+    "❌ OWNER PAYMENT PUSH FAILED:",
+    pushErr?.message || pushErr
+  );
+}
 
     return res.json({
       ok: true,
