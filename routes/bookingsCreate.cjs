@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const { getMileageSnapshot } = require("../utils/mileage.cjs");
 const { DateTime } = require("luxon");
+const { notifyUser } = require("../utils/pushNotifications.cjs");
 function parseBookingDateTime(dateValue, timeValue, timezone) {
   if (!dateValue || !timeValue || !timezone) return null;
 
@@ -512,6 +513,88 @@ insurance_total_cents: insuranceTotalCents,
     if (conversationError) {
       console.log("CREATE CONVERSATION ERROR:", conversationError.message);
     }
+
+    // 🔔 Notify host + GigRide owner about new booking
+try {
+  const vehicleName = [
+    vehicle.year,
+    vehicle.make,
+    vehicle.model,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const driverName =
+    String(driverProfile?.full_name || "").trim() || "A driver";
+
+  // Host gets operational booking information only
+  if (data.host_id) {
+    await notifyUser({
+      supabaseAdmin,
+      userId: data.host_id,
+      title: "🚗 New Booking Request",
+      body: `${driverName} requested your ${vehicleName}. Open GigRide to review the request.`,
+      data: {
+        type: "new_booking_request",
+        bookingId: data.id,
+      },
+    });
+  }
+
+  // Owner-only notification
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (ownerUserId) {
+    const bookingValueCents = Number(finalTotal || 0);
+    const platformRevenueCents = Math.round(
+      bookingValueCents * 0.08
+    );
+
+    const bookingValue = (
+      bookingValueCents / 100
+    ).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+
+    const platformRevenue = (
+      platformRevenueCents / 100
+    ).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+
+    await notifyUser({
+      supabaseAdmin,
+      userId: ownerUserId,
+      title: "🚗 New GigRide Booking",
+      body:
+        `${driverName} → ${vehicleName} • ` +
+        `${start_date}–${end_date} • ` +
+        `${bookingValue} booking • ` +
+        `${platformRevenue} potential GigRide revenue`,
+      data: {
+        type: "owner_new_booking",
+        bookingId: data.id,
+        bookingValueCents,
+        platformRevenueCents,
+      },
+    });
+  } else {
+    console.warn(
+      "⚠️ GIGRIDE_OWNER_USER_ID is not configured; owner booking push skipped."
+    );
+  }
+
+  console.log("✅ NEW BOOKING PUSHES SENT:", data.id);
+} catch (pushErr) {
+  console.error(
+    "❌ NEW BOOKING PUSH FAILED:",
+    pushErr?.message || pushErr
+  );
+}
 
         return res.json({ ok: true, booking: data });
   } catch (e) {
