@@ -57,4 +57,85 @@ async function sendWelcomeEmail({ to }) {
   });
 }
 
-module.exports = { sendWelcomeEmail };
+async function sendHostBookingReminderEmail({ to, bookingId }) {
+  if (!to) {
+    return { ok: false, error: "Missing recipient email" };
+  }
+
+  const result = await resend.emails.send({
+    from: process.env.FROM_EMAIL || "GigRide <support@gigride.app>",
+    to,
+    subject: "Action needed: GigRide booking request",
+    html: `
+      <table width="100%" cellpadding="0" cellspacing="0" border="0"
+        style="background-color:#F7F7FB;margin:0;padding:40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="560" cellpadding="0" cellspacing="0" border="0"
+              style="background-color:#FFFFFF;border-radius:24px;padding:32px;">
+              <tr>
+                <td style="font-family:Arial,sans-serif;color:#111827;">
+                  <img
+                    src="https://gigride.app/gigride.png"
+                    alt="GigRide"
+                    width="110"
+                    style="display:block;margin:0 auto 28px auto;"
+                  />
+
+                  <h2 style="margin:0 0 16px;text-align:center;">
+                    Booking request waiting
+                  </h2>
+
+                  <p style="font-size:16px;line-height:24px;color:#4B5563;">
+                    You have a GigRide booking request that has been waiting
+                    for your decision for more than one hour.
+                  </p>
+
+                  <p style="font-size:16px;line-height:24px;color:#4B5563;">
+                    Please open the GigRide app and approve or decline the
+                    request as soon as possible so the driver knows whether
+                    the vehicle is available.
+                  </p>
+
+                  <p style="font-size:13px;line-height:20px;color:#9CA3AF;">
+                    Booking reference:
+                    ${String(bookingId || "").slice(0, 8)}
+                  </p>
+
+                  <p style="margin-top:28px;font-size:13px;color:#9CA3AF;">
+                    Questions? Contact
+                    <a href="mailto:support@gigride.app"
+                      style="color:#8B5CF6;">support@gigride.app</a>
+                  </p>
+
+                  <p style="color:#4B5563;font-size:14px;line-height:22px;">
+                    <strong>GigRide</strong><br/>
+                    support@gigride.app
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    `,
+  });
+
+  if (result?.error) {
+    return {
+      ok: false,
+      error: result.error.message || "Resend rejected the email",
+    };
+  }
+
+  return {
+    ok: Boolean(result?.data?.id),
+    id: result?.data?.id || null,
+    error: result?.data?.id ? null : "Resend did not return an email ID",
+  };
+}
+
+module.exports = {
+  sendWelcomeEmail,
+  sendHostBookingReminderEmail,
+};
