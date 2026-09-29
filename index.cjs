@@ -24,6 +24,7 @@ const squareRoutes = require("./routes/squareRoutes.cjs");
 const payoutRoutes = require("./routes/payoutRoutes.cjs");
 const diditRoutes = require("./routes/diditRoutes.cjs");
 const accountRoutes = require("./routes/account.cjs");
+const supportRoutes = require("./routes/support.cjs");
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/api/square", squareRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/didit", diditRoutes);
 app.use("/api/account", accountRoutes);
+app.use("/api/support", supportRoutes);
 
 app.get("/", (req, res) => {
   res.json({ ok: true, message: "GigRide backend running" });
