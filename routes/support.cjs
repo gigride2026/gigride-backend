@@ -127,8 +127,6 @@ router.get("/bookings/:bookingId", async (req, res) => {
         cancelled_by,
         cancellation_reason,
         completed_at,
-        pickup_mileage,
-        return_mileage,
         pickup_odometer,
         return_odometer,
         damage_notes,
