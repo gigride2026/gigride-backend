@@ -93,4 +93,93 @@ router.get("/bookings", async (req, res) => {
   }
 });
 
+
+router.get("/bookings/:bookingId", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    const { data: booking, error } = await supabaseAdmin
+      .from("bookings")
+      .select(`
+        id,
+        vehicle_id,
+        driver_id,
+        host_id,
+        start_at,
+        end_at,
+        start_date,
+        end_date,
+        pickup_time,
+        dropoff_time,
+        rental_type,
+        status,
+        host_approved,
+        created_at,
+        deposit_paid,
+        deposit_paid_at,
+        payment_status,
+        paid_at,
+        refund_status,
+        insurance_status,
+        insurance_provider,
+        dispute_status,
+        cancelled_at,
+        cancelled_by,
+        cancellation_reason,
+        completed_at,
+        pickup_mileage,
+        return_mileage,
+        pickup_odometer,
+        return_odometer,
+        damage_notes,
+        vehicles:vehicle_id (
+          id,
+          year,
+          make,
+          model,
+          trim,
+          license_plate,
+          plate_state,
+          city,
+          state,
+          verification_status
+        ),
+        driver:driver_id (
+          id,
+          full_name,
+          email,
+          phone,
+          identity_status,
+          identity_verified,
+          mvr_status
+        ),
+        host:host_id (
+          id,
+          full_name,
+          email,
+          phone
+        )
+      `)
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("SUPPORT BOOKING DETAIL ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to load booking" });
+    }
+
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    return res.json({
+      ok: true,
+      booking,
+    });
+  } catch (err) {
+    console.error("SUPPORT BOOKING DETAIL ERROR:", err);
+    return res.status(500).json({ error: "Unable to load booking" });
+  }
+});
+
 module.exports = router;
