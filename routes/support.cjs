@@ -178,4 +178,54 @@ router.get("/bookings/:bookingId", async (req, res) => {
   }
 });
 
+
+router.get("/bookings/:bookingId/messages", async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    const { data: conversation, error: conversationError } =
+      await supabaseAdmin
+        .from("conversations")
+        .select("id, booking_id, driver_id, host_id")
+        .eq("booking_id", bookingId)
+        .maybeSingle();
+
+    if (conversationError) {
+      console.error(
+        "SUPPORT CONVERSATION LOOKUP ERROR:",
+        conversationError.message
+      );
+      return res.status(500).json({ error: "Unable to load conversation" });
+    }
+
+    if (!conversation) {
+      return res.json({
+        ok: true,
+        conversation: null,
+        messages: [],
+      });
+    }
+
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("messages")
+      .select("id, conversation_id, sender_id, body, read_at, created_at")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) {
+      console.error("SUPPORT MESSAGES ERROR:", messagesError.message);
+      return res.status(500).json({ error: "Unable to load messages" });
+    }
+
+    return res.json({
+      ok: true,
+      conversation,
+      messages: Array.isArray(messages) ? messages : [],
+    });
+  } catch (err) {
+    console.error("SUPPORT MESSAGES ERROR:", err);
+    return res.status(500).json({ error: "Unable to load messages" });
+  }
+});
+
 module.exports = router;
