@@ -305,4 +305,139 @@ router.get("/customers", async (req, res) => {
   }
 });
 
+
+router.get("/customers/:customerId", async (req, res) => {
+  try {
+    const customerId = String(req.params.customerId || "").trim();
+
+    if (!customerId) {
+      return res.status(400).json({ error: "Customer ID is required" });
+    }
+
+    const customerFields = `
+      id,
+      full_name,
+      email,
+      phone,
+      city,
+      is_driver,
+      is_host,
+      joined_at,
+      identity_status,
+      identity_verified,
+      insurance_status,
+      mvr_status
+    `;
+
+    const { data: customer, error: customerError } = await supabaseAdmin
+      .from("profiles")
+      .select(customerFields)
+      .eq("id", customerId)
+      .maybeSingle();
+
+    if (customerError) {
+      console.error("SUPPORT CUSTOMER DETAIL ERROR:", customerError.message);
+      return res.status(500).json({ error: "Unable to load customer" });
+    }
+
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+
+    const bookingFields = `
+      id,
+      vehicle_id,
+      driver_id,
+      host_id,
+      start_at,
+      end_at,
+      start_date,
+      end_date,
+      pickup_time,
+      dropoff_time,
+      rental_type,
+      status,
+      host_approved,
+      created_at,
+      deposit_paid,
+      deposit_paid_at,
+      payment_status,
+      paid_at,
+      insurance_status,
+      insurance_provider,
+      dispute_status,
+      cancelled_at,
+      cancelled_by,
+      cancellation_reason,
+      completed_at,
+      vehicles (
+        id,
+        year,
+        make,
+        model,
+        trim,
+        license_plate,
+        plate_state,
+        city,
+        state,
+        verification_status
+      )
+    `;
+
+    const bookingQuery = (field) =>
+      supabaseAdmin
+        .from("bookings")
+        .select(bookingFields)
+        .eq(field, customerId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+    const [driverBookingsResult, hostBookingsResult] = await Promise.all([
+      bookingQuery("driver_id"),
+      bookingQuery("host_id"),
+    ]);
+
+    const bookingsError =
+      driverBookingsResult.error || hostBookingsResult.error;
+
+    if (bookingsError) {
+      console.error(
+        "SUPPORT CUSTOMER BOOKINGS ERROR:",
+        bookingsError.message
+      );
+      return res.status(500).json({
+        error: "Unable to load customer bookings",
+      });
+    }
+
+    const bookingsById = new Map();
+
+    for (const booking of [
+      ...(driverBookingsResult.data || []),
+      ...(hostBookingsResult.data || []),
+    ]) {
+      if (booking?.id) {
+        bookingsById.set(booking.id, booking);
+      }
+    }
+
+    const bookings = Array.from(bookingsById.values())
+      .sort((a, b) => {
+        const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bDate - aDate;
+      })
+      .slice(0, 100);
+
+    return res.json({
+      ok: true,
+      customer,
+      bookings,
+    });
+  } catch (err) {
+    console.error("SUPPORT CUSTOMER DETAIL ERROR:", err);
+    return res.status(500).json({ error: "Unable to load customer" });
+  }
+});
+
 module.exports = router;
