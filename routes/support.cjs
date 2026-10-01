@@ -228,4 +228,81 @@ router.get("/bookings/:bookingId/messages", async (req, res) => {
   }
 });
 
+
+router.get("/customers", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+
+    if (q.length < 2 || q.length > 100) {
+      return res.status(400).json({
+        error: "Search must contain between 2 and 100 characters",
+      });
+    }
+
+    const customerFields = `
+      id,
+      full_name,
+      email,
+      phone,
+      city,
+      is_driver,
+      is_host,
+      joined_at,
+      identity_status,
+      identity_verified,
+      insurance_status,
+      mvr_status
+    `;
+
+    const searchField = (field) =>
+      supabaseAdmin
+        .from("profiles")
+        .select(customerFields)
+        .ilike(field, `%${q}%`)
+        .limit(25);
+
+    const [nameResult, emailResult, phoneResult] = await Promise.all([
+      searchField("full_name"),
+      searchField("email"),
+      searchField("phone"),
+    ]);
+
+    const searchError =
+      nameResult.error || emailResult.error || phoneResult.error;
+
+    if (searchError) {
+      console.error("SUPPORT CUSTOMER SEARCH ERROR:", searchError.message);
+      return res.status(500).json({ error: "Unable to search customers" });
+    }
+
+    const byId = new Map();
+
+    for (const customer of [
+      ...(nameResult.data || []),
+      ...(emailResult.data || []),
+      ...(phoneResult.data || []),
+    ]) {
+      if (customer?.id) {
+        byId.set(customer.id, customer);
+      }
+    }
+
+    const customers = Array.from(byId.values())
+      .sort((a, b) => {
+        const aDate = a.joined_at ? new Date(a.joined_at).getTime() : 0;
+        const bDate = b.joined_at ? new Date(b.joined_at).getTime() : 0;
+        return bDate - aDate;
+      })
+      .slice(0, 25);
+
+    return res.json({
+      ok: true,
+      customers,
+    });
+  } catch (err) {
+    console.error("SUPPORT CUSTOMER SEARCH ERROR:", err);
+    return res.status(500).json({ error: "Unable to search customers" });
+  }
+});
+
 module.exports = router;
