@@ -440,4 +440,554 @@ router.get("/customers/:customerId", async (req, res) => {
   }
 });
 
+
+// List support cases for staff.
+router.get("/cases", async (req, res) => {
+  try {
+    const { data: cases, error } = await supabaseAdmin
+      .from("support_cases")
+      .select(`
+        id,
+        customer_id,
+        booking_id,
+        subject,
+        description,
+        category,
+        priority,
+        status,
+        assigned_to,
+        created_by,
+        escalated_to_owner_at,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error("SUPPORT CASE LIST ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to load support cases" });
+    }
+
+    return res.json({
+      ok: true,
+      cases: Array.isArray(cases) ? cases : [],
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE LIST ERROR:", err);
+    return res.status(500).json({ error: "Unable to load support cases" });
+  }
+});
+
+
+// Create a support case.
+router.post("/cases", async (req, res) => {
+  try {
+    const customerId = String(req.body?.customer_id || "").trim();
+    const bookingId = req.body?.booking_id
+      ? String(req.body.booking_id).trim()
+      : null;
+    const subject = String(req.body?.subject || "").trim();
+    const description = String(req.body?.description || "").trim() || null;
+    const category = String(req.body?.category || "general").trim();
+    const priority = String(req.body?.priority || "normal").trim();
+
+    const allowedCategories = new Set([
+      "general",
+      "booking",
+      "payment",
+      "insurance",
+      "identity",
+      "mvr",
+      "vehicle",
+      "host",
+      "driver",
+      "technical",
+      "other",
+    ]);
+
+    const allowedPriorities = new Set([
+      "low",
+      "normal",
+      "high",
+      "urgent",
+    ]);
+
+    if (!customerId) {
+      return res.status(400).json({ error: "Customer ID is required" });
+    }
+
+    if (!subject || subject.length > 200) {
+      return res.status(400).json({
+        error: "Subject must contain between 1 and 200 characters",
+      });
+    }
+
+    if (description && description.length > 5000) {
+      return res.status(400).json({
+        error: "Description cannot exceed 5000 characters",
+      });
+    }
+
+    if (!allowedCategories.has(category)) {
+      return res.status(400).json({ error: "Invalid case category" });
+    }
+
+    if (!allowedPriorities.has(priority)) {
+      return res.status(400).json({ error: "Invalid case priority" });
+    }
+
+    const { data: customer, error: customerError } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id", customerId)
+      .maybeSingle();
+
+    if (customerError) {
+      console.error("SUPPORT CASE CUSTOMER ERROR:", customerError.message);
+      return res.status(500).json({ error: "Unable to verify customer" });
+    }
+
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+
+    if (bookingId) {
+      const { data: booking, error: bookingError } = await supabaseAdmin
+        .from("bookings")
+        .select("id, driver_id, host_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+
+      if (bookingError) {
+        console.error("SUPPORT CASE BOOKING ERROR:", bookingError.message);
+        return res.status(500).json({ error: "Unable to verify booking" });
+      }
+
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      if (
+        booking.driver_id !== customerId &&
+        booking.host_id !== customerId
+      ) {
+        return res.status(400).json({
+          error: "Booking does not belong to this customer",
+        });
+      }
+    }
+
+    const { data: supportCase, error: insertError } = await supabaseAdmin
+      .from("support_cases")
+      .insert({
+        customer_id: customerId,
+        booking_id: bookingId,
+        subject,
+        description,
+        category,
+        priority,
+        status: "open",
+        created_by: req.user.id,
+      })
+      .select(`
+        id,
+        customer_id,
+        booking_id,
+        subject,
+        description,
+        category,
+        priority,
+        status,
+        assigned_to,
+        created_by,
+        escalated_to_owner_at,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .single();
+
+    if (insertError) {
+      console.error("SUPPORT CASE CREATE ERROR:", insertError.message);
+      return res.status(500).json({ error: "Unable to create support case" });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      case: supportCase,
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE CREATE ERROR:", err);
+    return res.status(500).json({ error: "Unable to create support case" });
+  }
+});
+
+
+// Load one support case and its internal notes.
+router.get("/cases/:caseId", async (req, res) => {
+  try {
+    const caseId = String(req.params.caseId || "").trim();
+
+    if (!caseId) {
+      return res.status(400).json({ error: "Case ID is required" });
+    }
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select(`
+        id,
+        customer_id,
+        booking_id,
+        subject,
+        description,
+        category,
+        priority,
+        status,
+        assigned_to,
+        created_by,
+        escalated_to_owner_at,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .eq("id", caseId)
+      .maybeSingle();
+
+    if (caseError) {
+      console.error("SUPPORT CASE DETAIL ERROR:", caseError.message);
+      return res.status(500).json({ error: "Unable to load support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const customerPromise = supabaseAdmin
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        email,
+        phone,
+        city,
+        is_driver,
+        is_host,
+        identity_status,
+        identity_verified,
+        insurance_status,
+        mvr_status
+      `)
+      .eq("id", supportCase.customer_id)
+      .maybeSingle();
+
+    const notesPromise = supabaseAdmin
+      .from("support_case_notes")
+      .select(`
+        id,
+        case_id,
+        author_id,
+        body,
+        created_at
+      `)
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: true });
+
+    const bookingPromise = supportCase.booking_id
+      ? supabaseAdmin
+          .from("bookings")
+          .select(`
+            id,
+            vehicle_id,
+            driver_id,
+            host_id,
+            start_at,
+            end_at,
+            start_date,
+            end_date,
+            status,
+            payment_status,
+            insurance_status,
+            dispute_status,
+            created_at
+          `)
+          .eq("id", supportCase.booking_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null });
+
+    const [customerResult, notesResult, bookingResult] =
+      await Promise.all([
+        customerPromise,
+        notesPromise,
+        bookingPromise,
+      ]);
+
+    const relatedError =
+      customerResult.error ||
+      notesResult.error ||
+      bookingResult.error;
+
+    if (relatedError) {
+      console.error(
+        "SUPPORT CASE RELATED DATA ERROR:",
+        relatedError.message
+      );
+      return res.status(500).json({
+        error: "Unable to load support case details",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      case: supportCase,
+      customer: customerResult.data || null,
+      booking: bookingResult.data || null,
+      notes: Array.isArray(notesResult.data)
+        ? notesResult.data
+        : [],
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE DETAIL ERROR:", err);
+    return res.status(500).json({ error: "Unable to load support case" });
+  }
+});
+
+
+// Add an internal staff note to a support case.
+router.post("/cases/:caseId/notes", async (req, res) => {
+  try {
+    const caseId = String(req.params.caseId || "").trim();
+    const body = String(req.body?.body || "").trim();
+
+    if (!caseId) {
+      return res.status(400).json({ error: "Case ID is required" });
+    }
+
+    if (!body || body.length > 5000) {
+      return res.status(400).json({
+        error: "Note must contain between 1 and 5000 characters",
+      });
+    }
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select("id")
+      .eq("id", caseId)
+      .maybeSingle();
+
+    if (caseError) {
+      console.error("SUPPORT CASE NOTE LOOKUP ERROR:", caseError.message);
+      return res.status(500).json({ error: "Unable to verify support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const { data: note, error: noteError } = await supabaseAdmin
+      .from("support_case_notes")
+      .insert({
+        case_id: caseId,
+        author_id: req.user.id,
+        body,
+      })
+      .select(`
+        id,
+        case_id,
+        author_id,
+        body,
+        created_at
+      `)
+      .single();
+
+    if (noteError) {
+      console.error("SUPPORT CASE NOTE CREATE ERROR:", noteError.message);
+      return res.status(500).json({ error: "Unable to add internal note" });
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("support_cases")
+      .update({
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", caseId);
+
+    if (updateError) {
+      console.error(
+        "SUPPORT CASE NOTE TIMESTAMP ERROR:",
+        updateError.message
+      );
+    }
+
+    return res.status(201).json({
+      ok: true,
+      note,
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE NOTE CREATE ERROR:", err);
+    return res.status(500).json({ error: "Unable to add internal note" });
+  }
+});
+
+
+// Update the workflow status of a support case.
+router.patch("/cases/:caseId/status", async (req, res) => {
+  try {
+    const caseId = String(req.params.caseId || "").trim();
+    const status = String(req.body?.status || "").trim();
+
+    const allowedStatuses = new Set([
+      "open",
+      "in_progress",
+      "waiting_on_customer",
+      "resolved",
+      "closed",
+    ]);
+
+    if (!caseId) {
+      return res.status(400).json({ error: "Case ID is required" });
+    }
+
+    // Escalation uses a separate endpoint so owner escalation
+    // cannot be triggered through a generic status update.
+    if (!allowedStatuses.has(status)) {
+      return res.status(400).json({ error: "Invalid case status" });
+    }
+
+    const now = new Date().toISOString();
+
+    const updates = {
+      status,
+      updated_at: now,
+      resolved_at: status === "resolved" ? now : null,
+      closed_at: status === "closed" ? now : null,
+    };
+
+    const { data: supportCase, error } = await supabaseAdmin
+      .from("support_cases")
+      .update(updates)
+      .eq("id", caseId)
+      .select(`
+        id,
+        customer_id,
+        booking_id,
+        subject,
+        category,
+        priority,
+        status,
+        assigned_to,
+        created_by,
+        escalated_to_owner_at,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .maybeSingle();
+
+    if (error) {
+      console.error("SUPPORT CASE STATUS ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to update support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    return res.json({
+      ok: true,
+      case: supportCase,
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE STATUS ERROR:", err);
+    return res.status(500).json({ error: "Unable to update support case" });
+  }
+});
+
+
+// Escalate a support case to the GigRide owner.
+router.post("/cases/:caseId/escalate", async (req, res) => {
+  try {
+    const caseId = String(req.params.caseId || "").trim();
+    const ownerId = String(process.env.GIGRIDE_OWNER_USER_ID || "").trim();
+
+    if (!caseId) {
+      return res.status(400).json({ error: "Case ID is required" });
+    }
+
+    if (!ownerId) {
+      console.error("SUPPORT CASE ESCALATION ERROR: owner user ID is not configured");
+      return res.status(500).json({ error: "Owner escalation is unavailable" });
+    }
+
+    const { data: owner, error: ownerError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, staff_role")
+      .eq("id", ownerId)
+      .maybeSingle();
+
+    if (ownerError) {
+      console.error("SUPPORT CASE OWNER LOOKUP ERROR:", ownerError.message);
+      return res.status(500).json({ error: "Unable to verify owner account" });
+    }
+
+    if (!owner || owner.staff_role !== "owner") {
+      console.error("SUPPORT CASE ESCALATION ERROR: configured owner is invalid");
+      return res.status(500).json({ error: "Owner escalation is unavailable" });
+    }
+
+    const now = new Date().toISOString();
+
+    const { data: supportCase, error } = await supabaseAdmin
+      .from("support_cases")
+      .update({
+        status: "escalated",
+        assigned_to: ownerId,
+        escalated_to_owner_at: now,
+        resolved_at: null,
+        closed_at: null,
+        updated_at: now,
+      })
+      .eq("id", caseId)
+      .select(`
+        id,
+        customer_id,
+        booking_id,
+        subject,
+        category,
+        priority,
+        status,
+        assigned_to,
+        created_by,
+        escalated_to_owner_at,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .maybeSingle();
+
+    if (error) {
+      console.error("SUPPORT CASE ESCALATION ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to escalate support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    return res.json({
+      ok: true,
+      case: supportCase,
+    });
+  } catch (err) {
+    console.error("SUPPORT CASE ESCALATION ERROR:", err);
+    return res.status(500).json({ error: "Unable to escalate support case" });
+  }
+});
+
 module.exports = router;
