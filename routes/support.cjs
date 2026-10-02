@@ -945,12 +945,9 @@ router.post("/cases/:caseId/escalate", async (req, res) => {
     const { data: supportCase, error } = await supabaseAdmin
       .from("support_cases")
       .update({
-        status: "escalated",
-        assigned_to: ownerId,
+          assigned_to: ownerId,
         escalated_to_owner_at: now,
-        resolved_at: null,
-        closed_at: null,
-        updated_at: now,
+            updated_at: now,
       })
       .eq("id", caseId)
       .select(`
