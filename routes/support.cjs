@@ -2,13 +2,149 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../middlewares/auth.cjs");
-const { requireStaff } = require("../middlewares/staffAuth.cjs");
+const { requireStaff, requireOwner } = require("../middlewares/staffAuth.cjs");
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 // Every Support Center endpoint must pass both authentication
 // and GigRide staff authorization.
 router.use(authMiddleware, requireStaff);
+
+// Owner-only staff management.
+router.post("/staff/invite", requireOwner, async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const { data: inviteData, error: inviteError } =
+      await supabaseAdmin.auth.admin.inviteUserByEmail(email);
+
+    if (inviteError) {
+      console.error("SUPPORT STAFF INVITE ERROR:", inviteError.message);
+      return res.status(400).json({ error: inviteError.message });
+    }
+
+    const user = inviteData?.user;
+
+    if (!user?.id) {
+      return res.status(500).json({ error: "Invite did not return a user" });
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          email,
+          is_driver: false,
+          is_host: false,
+          staff_role: "support_agent",
+          joined_at: new Date().toISOString(),
+          identity_status: "not_started",
+          identity_verified: false,
+        },
+        { onConflict: "id" }
+      );
+
+    if (profileError) {
+      console.error("SUPPORT STAFF PROFILE ERROR:", profileError.message);
+
+      // Do not leave an invited Auth user with no authorized staff profile.
+      await supabaseAdmin.auth.admin.deleteUser(user.id);
+
+      return res.status(500).json({
+        error: "Unable to create support staff profile",
+      });
+    }
+
+    return res.status(201).json({
+      ok: true,
+      staff: {
+        id: user.id,
+        email,
+        staff_role: "support_agent",
+      },
+    });
+  } catch (error) {
+    console.error("SUPPORT STAFF INVITE ERROR:", error);
+    return res.status(500).json({ error: "Unable to invite support staff" });
+  }
+});
+
+router.delete("/staff/:userId/access", requireOwner, async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: "You cannot revoke your own staff access" });
+    }
+
+    const { data: profile, error: lookupError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, staff_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("SUPPORT STAFF REVOKE LOOKUP ERROR:", lookupError.message);
+      return res.status(500).json({ error: "Unable to verify support staff" });
+    }
+
+    if (!profile || profile.staff_role !== "support_agent") {
+      return res.status(404).json({ error: "Support agent not found" });
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("profiles")
+      .update({ staff_role: null })
+      .eq("id", userId);
+
+    if (updateError) {
+      console.error("SUPPORT STAFF REVOKE ERROR:", updateError.message);
+      return res.status(500).json({ error: "Unable to revoke support access" });
+    }
+
+    return res.json({
+      ok: true,
+      user_id: userId,
+      email: profile.email,
+      staff_role: null,
+    });
+  } catch (error) {
+    console.error("SUPPORT STAFF REVOKE ERROR:", error);
+    return res.status(500).json({ error: "Unable to revoke support access" });
+  }
+});
+
+router.get("/staff", requireOwner, async (req, res) => {
+  try {
+    const { data: staff, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, staff_role, joined_at")
+      .eq("staff_role", "support_agent")
+      .order("joined_at", { ascending: false });
+
+    if (error) {
+      console.error("SUPPORT STAFF LIST ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to load support staff" });
+    }
+
+    return res.json({
+      ok: true,
+      staff: staff || [],
+    });
+  } catch (error) {
+    console.error("SUPPORT STAFF LIST ERROR:", error);
+    return res.status(500).json({ error: "Unable to load support staff" });
+  }
+});
 
 router.get("/me", (req, res) => {
   return res.json({
