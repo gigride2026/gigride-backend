@@ -21,7 +21,7 @@ router.post("/staff/invite", requireOwner, async (req, res) => {
 
     const { data: inviteData, error: inviteError } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: "gigride://reset-password",
+          redirectTo: "gigride://support-invite",
         });
 
     if (inviteError) {
