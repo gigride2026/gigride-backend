@@ -10,6 +10,59 @@ const { sendSupportInviteCodeEmail } = require("../utils/email.cjs");
 
 // Every Support Center endpoint must pass both authentication
 // and GigRide staff authorization.
+
+// Public endpoint used by an invited support agent to verify the emailed code.
+router.post("/staff/invite/verify", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "").trim();
+
+    if (!email || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: "Email and 6-digit invite code are required" });
+    }
+
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+
+    const { data: invite, error: lookupError } = await supabaseAdmin
+      .from("support_invites")
+      .select("*")
+      .eq("email", email)
+      .eq("code_hash", codeHash)
+      .is("used_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("expires_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("SUPPORT INVITE VERIFY LOOKUP ERROR:", lookupError.message);
+      return res.status(500).json({ error: "Unable to verify invite" });
+    }
+
+    if (!invite) {
+      return res.status(400).json({ error: "Invalid or expired invite code" });
+    }
+
+    const { error: consumeError } = await supabaseAdmin
+      .from("support_invites")
+      .update({ used_at: new Date().toISOString() })
+      .eq("id", invite.id);
+
+    if (consumeError) {
+      console.error("SUPPORT INVITE CONSUME ERROR:", consumeError.message);
+      return res.status(500).json({ error: "Unable to complete invite" });
+    }
+
+    return res.json({
+      ok: true,
+      email,
+    });
+  } catch (error) {
+    console.error("SUPPORT INVITE VERIFY ERROR:", error);
+    return res.status(500).json({ error: "Unable to verify invite" });
+  }
+});
+
 router.use(authMiddleware, requireStaff);
 
 // Owner-only staff management.
