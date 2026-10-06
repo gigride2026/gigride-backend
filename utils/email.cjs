@@ -135,7 +135,49 @@ async function sendHostBookingReminderEmail({ to, bookingId }) {
   };
 }
 
+
+async function sendSupportInviteCodeEmail({ to, code }) {
+  if (!to || !code) {
+    return { ok: false, error: "Missing recipient email or invite code" };
+  }
+
+  const result = await resend.emails.send({
+    from: process.env.FROM_EMAIL || "GigRide <support@gigride.app>",
+    to,
+    subject: "Your GigRide Support access code",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#111827;">
+        <h2 style="margin-bottom:16px;">You're invited to GigRide Support</h2>
+        <p>Use the verification code below to accept your staff invitation:</p>
+
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;text-align:center;padding:24px;margin:24px 0;background:#F3F4F6;border-radius:12px;">
+          ${code}
+        </div>
+
+        <p>Open the GigRide app and enter this code on the Support invitation screen.</p>
+        <p style="color:#6B7280;font-size:13px;margin-top:28px;">
+          If you were not expecting this invitation, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+
+  if (result?.error) {
+    return {
+      ok: false,
+      error: result.error.message || "Resend rejected the email",
+    };
+  }
+
+  return {
+    ok: Boolean(result?.data?.id),
+    id: result?.data?.id || null,
+    error: result?.data?.id ? null : "Resend did not return an email ID",
+  };
+}
+
 module.exports = {
   sendWelcomeEmail,
   sendHostBookingReminderEmail,
+  sendSupportInviteCodeEmail,
 };

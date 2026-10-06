@@ -1,10 +1,12 @@
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 
 const authMiddleware = require("../middlewares/auth.cjs");
 const { requireStaff, requireOwner } = require("../middlewares/staffAuth.cjs");
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const { sendSupportInviteCodeEmail } = require("../utils/email.cjs");
 
 // Every Support Center endpoint must pass both authentication
 // and GigRide staff authorization.
@@ -19,57 +21,36 @@ router.post("/staff/invite", requireOwner, async (req, res) => {
       return res.status(400).json({ error: "Email is required" });
     }
 
-    const { data: inviteData, error: inviteError } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: "gigride://support-invite",
-        });
+    const code = String(crypto.randomInt(100000, 1000000));
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    const { error: inviteError } = await supabaseAdmin
+      .from("support_invites")
+      .insert({
+        email,
+        code_hash: codeHash,
+        expires_at: expiresAt,
+      });
 
     if (inviteError) {
-      console.error("SUPPORT STAFF INVITE ERROR:", inviteError.message);
-      return res.status(400).json({ error: inviteError.message });
+      console.error("SUPPORT INVITE CODE ERROR:", inviteError.message);
+      return res.status(500).json({ error: "Unable to create support invite" });
     }
 
-    const user = inviteData?.user;
+    const emailResult = await sendSupportInviteCodeEmail({ to: email, code });
 
-    if (!user?.id) {
-      return res.status(500).json({ error: "Invite did not return a user" });
-    }
-
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          email,
-          is_driver: false,
-          is_host: false,
-          staff_role: "support_agent",
-          joined_at: new Date().toISOString(),
-          identity_status: "not_started",
-          identity_verified: false,
-        },
-        { onConflict: "id" }
-      );
-
-    if (profileError) {
-      console.error("SUPPORT STAFF PROFILE ERROR:", profileError.message);
-
-      // Do not leave an invited Auth user with no authorized staff profile.
-      await supabaseAdmin.auth.admin.deleteUser(user.id);
-
-      return res.status(500).json({
-        error: "Unable to create support staff profile",
-      });
+    if (!emailResult?.ok) {
+      console.error("SUPPORT INVITE EMAIL ERROR:", emailResult?.error);
+      return res.status(500).json({ error: "Unable to send support invite email" });
     }
 
     return res.status(201).json({
       ok: true,
-      staff: {
-        id: user.id,
-        email,
-        staff_role: "support_agent",
-      },
+      email,
+      expires_at: expiresAt,
     });
+
   } catch (error) {
     console.error("SUPPORT STAFF INVITE ERROR:", error);
     return res.status(500).json({ error: "Unable to invite support staff" });
