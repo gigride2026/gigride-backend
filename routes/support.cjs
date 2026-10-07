@@ -53,11 +53,28 @@ router.post("/staff/invite/verify", async (req, res) => {
       return res.status(500).json({ error: "Unable to complete invite" });
     }
 
-    return res.json({
+    
+const { data: authLink, error: authLinkError } =
+  await supabaseAdmin.auth.admin.generateLink({
+    type: "invite",
+    email,
+  });
+
+if (authLinkError || !authLink?.properties?.hashed_token) {
+  console.error(
+    "SUPPORT INVITE AUTH TOKEN ERROR:",
+    authLinkError?.message || "Missing hashed token"
+  );
+  return res.status(500).json({ error: "Unable to create support session" });
+}
+
+
+const hashedToken = authLink.properties.hashed_token;
+return res.json({
       ok: true,
       email,
-    });
-  } catch (error) {
+hashed_token: hashedToken,
+  });  } catch (error) {
     console.error("SUPPORT INVITE VERIFY ERROR:", error);
     return res.status(500).json({ error: "Unable to verify invite" });
   }
