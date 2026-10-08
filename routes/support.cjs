@@ -68,6 +68,41 @@ if (authLinkError || !authLink?.properties?.hashed_token) {
   return res.status(500).json({ error: "Unable to create support session" });
 }
 
+const { data: usersData, error: usersError } =
+  await supabaseAdmin.auth.admin.listUsers();
+
+if (usersError) {
+  console.error("SUPPORT INVITE USER LOOKUP ERROR:", usersError.message);
+  return res.status(500).json({ error: "Unable to authorize support staff" });
+}
+
+const invitedUser = usersData.users.find(
+  (user) => user.email?.toLowerCase() === email
+);
+
+if (!invitedUser?.id) {
+  return res.status(404).json({ error: "Invited user not found" });
+}
+
+const { error: profileError } = await supabaseAdmin
+  .from("profiles")
+  .upsert(
+    {
+      id: invitedUser.id,
+      email,
+      is_driver: false,
+      is_host: false,
+      staff_role: "support_agent",
+      identity_status: "not_started",
+      identity_verified: false,
+    },
+    { onConflict: "id" }
+  );
+
+if (profileError) {
+  console.error("SUPPORT INVITE PROFILE ERROR:", profileError.message);
+  return res.status(500).json({ error: "Unable to authorize support staff" });
+}
 
 const hashedToken = authLink.properties.hashed_token;
 return res.json({
