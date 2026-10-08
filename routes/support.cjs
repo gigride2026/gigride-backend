@@ -90,11 +90,9 @@ const { error: profileError } = await supabaseAdmin
     {
       id: invitedUser.id,
       email,
-      is_driver: false,
-      is_host: false,
-      staff_role: "support_agent",
-      identity_status: "not_started",
-      identity_verified: false,
+       staff_role: "support_agent",
+      
+      
     },
     { onConflict: "id" }
   );
