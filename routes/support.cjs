@@ -56,7 +56,7 @@ router.post("/staff/invite/verify", async (req, res) => {
     
 const { data: authLink, error: authLinkError } =
   await supabaseAdmin.auth.admin.generateLink({
-    type: "invite",
+    type: "magiclink",
     email,
   });
 
