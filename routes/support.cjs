@@ -83,7 +83,22 @@ const invitedUser = usersData.users.find(
 if (!invitedUser?.id) {
   return res.status(404).json({ error: "Invited user not found" });
 }
+const { data: existingProfile, error: existingProfileError } =
+  await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("id", invitedUser.id)
+    .maybeSingle();
 
+if (existingProfileError) {
+  console.error(
+    "SUPPORT INVITE EXISTING PROFILE ERROR:",
+    existingProfileError.message
+  );
+  return res.status(500).json({ error: "Unable to authorize support staff" });
+}
+
+const hadExistingProfile = !!existingProfile;
 const { error: profileError } = await supabaseAdmin
   .from("profiles")
   .upsert(
@@ -107,7 +122,8 @@ return res.json({
       ok: true,
       email,
 hashed_token: hashedToken,
-  });  } catch (error) {
+had_existing_profile: hadExistingProfile, 
+ });  } catch (error) {
     console.error("SUPPORT INVITE VERIFY ERROR:", error);
     return res.status(500).json({ error: "Unable to verify invite" });
   }
