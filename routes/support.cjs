@@ -48,15 +48,7 @@ console.log("SUPPORT INVITE DEBUG:", {
       return res.status(400).json({ error: "Invalid or expired invite code" });
     }
 
-    const { error: consumeError } = await supabaseAdmin
-      .from("support_invites")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", invite.id);
-
-    if (consumeError) {
-      console.error("SUPPORT INVITE CONSUME ERROR:", consumeError.message);
-      return res.status(500).json({ error: "Unable to complete invite" });
-    }
+    
 
     
 const { data: authLink, error: authLinkError } =
@@ -121,7 +113,15 @@ if (profileError) {
   console.error("SUPPORT INVITE PROFILE ERROR:", profileError.message);
   return res.status(500).json({ error: "Unable to authorize support staff" });
 }
+const { error: consumeError } = await supabaseAdmin
+  .from("support_invites")
+  .update({ used_at: new Date().toISOString() })
+  .eq("id", invite.id);
 
+if (consumeError) {
+  console.error("SUPPORT INVITE CONSUME ERROR:", consumeError.message);
+  return res.status(500).json({ error: "Unable to complete invite" });
+}
 const hashedToken = authLink.properties.hashed_token;
 const verificationType = authLink.properties.verification_type;
 return res.json({
