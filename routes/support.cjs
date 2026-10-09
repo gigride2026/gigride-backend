@@ -146,6 +146,7 @@ router.post("/staff/invite", requireOwner, async (req, res) => {
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
+console.log("SUPPORT INVITE GENERATED CODE:", { email, code });
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
