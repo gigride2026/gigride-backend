@@ -123,10 +123,12 @@ if (profileError) {
 }
 
 const hashedToken = authLink.properties.hashed_token;
+const verificationType = authLink.properties.verification_type;
 return res.json({
       ok: true,
       email,
 hashed_token: hashedToken,
+verification_type: verificationType,
 had_existing_profile: hadExistingProfile, 
  });  } catch (error) {
     console.error("SUPPORT INVITE VERIFY ERROR:", error);
