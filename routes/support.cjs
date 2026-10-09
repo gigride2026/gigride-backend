@@ -22,11 +22,6 @@ router.post("/staff/invite/verify", async (req, res) => {
     }
 
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-console.log("SUPPORT INVITE DEBUG:", {
-  email,
-  code,
-  codeHash,
-});
 
     const { data: invite, error: lookupError } = await supabaseAdmin
       .from("support_invites")
