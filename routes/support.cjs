@@ -46,19 +46,7 @@ router.post("/staff/invite/verify", async (req, res) => {
     
 
     
-const { data: authLink, error: authLinkError } =
-  await supabaseAdmin.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
 
-if (authLinkError || !authLink?.properties?.hashed_token) {
-  console.error(
-    "SUPPORT INVITE AUTH TOKEN ERROR:",
-    authLinkError?.message || "Missing hashed token"
-  );
-  return res.status(500).json({ error: "Unable to create support session" });
-}
 
 const { data: usersData, error: usersError } =
   await supabaseAdmin.auth.admin.listUsers();
@@ -74,6 +62,29 @@ const invitedUser = usersData.users.find(
 
 if (!invitedUser?.id) {
   return res.status(404).json({ error: "Invited user not found" });
+}
+if (!invitedUser.email_confirmed_at) {
+  const { error: confirmError } =
+    await supabaseAdmin.auth.admin.updateUserById(invitedUser.id, {
+      email_confirm: true,
+    });
+
+  if (confirmError) {
+    console.error("SUPPORT INVITE EMAIL CONFIRM ERROR:", confirmError.message);
+    return res.status(500).json({ error: "Unable to confirm support account" });
+  }
+}const { data: authLink, error: authLinkError } =
+  await supabaseAdmin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+  });
+
+if (authLinkError || !authLink?.properties?.hashed_token) {
+  console.error(
+    "SUPPORT INVITE AUTH TOKEN ERROR:",
+    authLinkError?.message || "Missing hashed token"
+  );
+  return res.status(500).json({ error: "Unable to create support session" });
 }
 const { data: existingProfile, error: existingProfileError } =
   await supabaseAdmin
