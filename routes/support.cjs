@@ -1239,4 +1239,92 @@ router.post("/cases/:caseId/escalate", async (req, res) => {
   }
 });
 
+
+// Staff: retrieve messages for a support case
+router.get("/cases/:caseId/messages", async (req, res) => {
+  try {
+    const { caseId } = req.params;
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select("id")
+      .eq("id", caseId)
+      .maybeSingle();
+
+    if (caseError) {
+      console.error("SUPPORT CASE LOOKUP ERROR:", caseError.message);
+      return res.status(500).json({ error: "Unable to load support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("support_messages")
+      .select("id, case_id, sender_id, body, created_at, read_at")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) {
+      console.error("SUPPORT MESSAGE LOAD ERROR:", messagesError.message);
+      return res.status(500).json({ error: "Unable to load support messages" });
+    }
+
+    return res.json({
+      ok: true,
+      messages: messages || [],
+    });
+  } catch (error) {
+    console.error("SUPPORT MESSAGE ERROR:", error);
+    return res.status(500).json({ error: "Unable to load support messages" });
+  }
+});
+// Staff: send a message to a customer in a support case
+router.post("/cases/:caseId/messages", async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const body = String(req.body?.body || "").trim();
+
+    if (!body || body.length > 5000) {
+      return res.status(400).json({
+        error: "Message must be between 1 and 5000 characters",
+      });
+    }
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select("id")
+      .eq("id", caseId)
+      .maybeSingle();
+
+    if (caseError) {
+      return res.status(500).json({ error: "Unable to load support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const { data: message, error: messageError } = await supabaseAdmin
+      .from("support_messages")
+      .insert({
+        case_id: caseId,
+        sender_id: req.user.id,
+        body,
+      })
+      .select("id, case_id, sender_id, body, created_at, read_at")
+      .single();
+
+    if (messageError) {
+      console.error("SUPPORT MESSAGE SEND ERROR:", messageError.message);
+      return res.status(500).json({ error: "Unable to send message" });
+    }
+
+    return res.status(201).json({ ok: true, message });
+  } catch (error) {
+    console.error("SUPPORT MESSAGE ERROR:", error);
+    return res.status(500).json({ error: "Unable to send message" });
+  }
+});
 module.exports = router;
