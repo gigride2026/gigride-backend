@@ -141,6 +141,75 @@ had_existing_profile: hadExistingProfile,
     return res.status(500).json({ error: "Unable to verify invite" });
   }
 });
+// Customer: create their own support case.
+router.post("/customer/cases", authMiddleware, async (req, res) => {
+  try {
+    const subject = String(req.body?.subject || "").trim();
+    const description = String(req.body?.description || "").trim();
+    const category = String(req.body?.category || "general").trim().toLowerCase();
+    const bookingId = req.body?.booking_id || null;
+
+    const allowedCategories = new Set([
+      "general", "booking", "payment", "insurance", "identity",
+      "mvr", "vehicle", "host", "driver", "technical", "other",
+    ]);
+
+    if (!subject || subject.length > 200 || !description || description.length > 5000) {
+      return res.status(400).json({
+        error: "Subject must be 1-200 characters and description 1-5000 characters",
+      });
+    }
+
+    if (!allowedCategories.has(category)) {
+      return res.status(400).json({ error: "Invalid category" });
+    }
+
+    if (bookingId) {
+      const { data: booking, error: bookingError } = await supabaseAdmin
+        .from("bookings")
+        .select("id, driver_id, host_id")
+        .eq("id", bookingId)
+        .maybeSingle();
+
+      if (bookingError) {
+        return res.status(500).json({ error: "Unable to verify booking" });
+      }
+
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      if (booking.driver_id !== req.user.id && booking.host_id !== req.user.id) {
+        return res.status(403).json({ error: "Booking does not belong to you" });
+      }
+    }
+
+    const { data: supportCase, error } = await supabaseAdmin
+      .from("support_cases")
+      .insert({
+        customer_id: req.user.id,
+        booking_id: bookingId,
+        subject,
+        description,
+        category,
+        priority: "normal",
+        status: "open",
+        created_by: req.user.id,
+      })
+      .select("id, subject, category, status, created_at")
+      .single();
+
+    if (error) {
+      console.error("CUSTOMER CASE CREATE ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to create support case" });
+    }
+
+    return res.status(201).json({ ok: true, case: supportCase });
+  } catch (error) {
+    console.error("CUSTOMER CASE CREATE ERROR:", error);
+    return res.status(500).json({ error: "Unable to create support case" });
+  }
+});
 // Customer: list only their own support cases.
 router.get("/customer/cases", authMiddleware, async (req, res) => {
   try {
