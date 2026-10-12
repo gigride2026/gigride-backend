@@ -141,7 +141,116 @@ had_existing_profile: hadExistingProfile,
     return res.status(500).json({ error: "Unable to verify invite" });
   }
 });
+// Customer: list only their own support cases.
+router.get("/customer/cases", authMiddleware, async (req, res) => {
+  try {
+    const { data: cases, error } = await supabaseAdmin
+      .from("support_cases")
+      .select("id, subject, category, priority, status, created_at, updated_at")
+      .eq("customer_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
+    if (error) {
+      console.error("CUSTOMER SUPPORT CASES ERROR:", error.message);
+      return res.status(500).json({ error: "Unable to load support cases" });
+    }
+
+    return res.json({ ok: true, cases: cases || [] });
+  } catch (error) {
+    console.error("CUSTOMER SUPPORT CASES ERROR:", error);
+    return res.status(500).json({ error: "Unable to load support cases" });
+  }
+});
+
+
+// Customer: read messages from their own support case.
+router.get("/customer/cases/:caseId/messages", authMiddleware, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select("id, customer_id")
+      .eq("id", caseId)
+      .eq("customer_id", req.user.id)
+      .maybeSingle();
+
+    if (caseError) {
+      console.error("CUSTOMER CASE LOOKUP ERROR:", caseError.message);
+      return res.status(500).json({ error: "Unable to load support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("support_messages")
+      .select("id, case_id, sender_id, body, created_at, read_at")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) {
+      console.error("CUSTOMER MESSAGE LOAD ERROR:", messagesError.message);
+      return res.status(500).json({ error: "Unable to load messages" });
+    }
+
+    return res.json({ ok: true, messages: messages || [] });
+  } catch (error) {
+    console.error("CUSTOMER MESSAGE ERROR:", error);
+    return res.status(500).json({ error: "Unable to load messages" });
+  }
+});
+// Customer: send a message on their own support case.
+router.post("/customer/cases/:caseId/messages", authMiddleware, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const body = String(req.body?.body || "").trim();
+
+    if (!body || body.length > 5000) {
+      return res.status(400).json({
+        error: "Message must be between 1 and 5000 characters",
+      });
+    }
+
+    const { data: supportCase, error: caseError } = await supabaseAdmin
+      .from("support_cases")
+      .select("id, customer_id")
+      .eq("id", caseId)
+      .eq("customer_id", req.user.id)
+      .maybeSingle();
+
+    if (caseError) {
+      console.error("CUSTOMER CASE LOOKUP ERROR:", caseError.message);
+      return res.status(500).json({ error: "Unable to load support case" });
+    }
+
+    if (!supportCase) {
+      return res.status(404).json({ error: "Support case not found" });
+    }
+
+    const { data: message, error: messageError } = await supabaseAdmin
+      .from("support_messages")
+      .insert({
+        case_id: caseId,
+        sender_id: req.user.id,
+        body,
+      })
+      .select("id, case_id, sender_id, body, created_at, read_at")
+      .single();
+
+    if (messageError) {
+      console.error("CUSTOMER MESSAGE SEND ERROR:", messageError.message);
+      return res.status(500).json({ error: "Unable to send message" });
+    }
+
+    return res.status(201).json({ ok: true, message });
+  } catch (error) {
+    console.error("CUSTOMER MESSAGE ERROR:", error);
+    return res.status(500).json({ error: "Unable to send message" });
+  }
+});
 router.use(authMiddleware, requireStaff);
 
 // Owner-only staff management.
