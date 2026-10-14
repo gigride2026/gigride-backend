@@ -23,6 +23,7 @@ const paypalRoutes = require("./routes/paypal.cjs");
 const squareRoutes = require("./routes/squareRoutes.cjs");
 const payoutRoutes = require("./routes/payoutRoutes.cjs");
 const diditRoutes = require("./routes/diditRoutes.cjs");
+const checkrRoutes = require("./routes/checkrRoutes.cjs");
 const accountRoutes = require("./routes/account.cjs");
 const supportRoutes = require("./routes/support.cjs");
 
@@ -59,6 +60,7 @@ app.use("/api/paypal", paypalRoutes);
 app.use("/api/square", squareRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/didit", diditRoutes);
+app.use("/api/checkr", checkrRoutes);
 app.use("/api/account", accountRoutes);
 app.use("/api/support", supportRoutes);
 
