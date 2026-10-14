@@ -21,4 +21,24 @@ router.get("/status", async (req, res) => {
   }
 });
 
+// Authenticated Checkr API connection test (read-only)
+router.get("/test-connection", async (req, res) => {
+  try {
+    const account = await getCheckrAccount();
+
+    return res.json({
+      connected: true,
+      message: "Checkr API connection successful",
+      accountId: account.id,
+    });
+  } catch (error) {
+    console.error("Checkr connection test failed:", error.message);
+
+    return res.status(502).json({
+      connected: false,
+      message: "Checkr API connection failed",
+    });
+  }
+});
+
 module.exports = router;
