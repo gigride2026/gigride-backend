@@ -1,7 +1,7 @@
-// services/checkrClient.cjs
+
 const axios = require("axios");
 
-const CHECKR_BASE_URL = "https://api.checkr.com/v1";
+const CHECKR_BASE_URL = "https://api.checkr-staging.com/v1";
 
 function getCheckrClient() {
   const apiKey = process.env.CHECKR_API_KEY;
