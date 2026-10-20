@@ -1,10 +1,18 @@
 
 const axios = require("axios");
+const CHECKR_PACKAGE_SLUG = process.env.CHECKR_PACKAGE_SLUG;
 
-const CHECKR_BASE_URL = "https://api.checkr-staging.com/v1";
-
+const CHECKR_BASE_URL = "https://" + "api.checkr-staging.com/v1";
 function getCheckrClient() {
   const apiKey = process.env.CHECKR_API_KEY;
+
+const checkrEnvironment = process.env.CHECKR_ENVIRONMENT || "staging";
+
+if (checkrEnvironment !== "staging") {
+  throw new Error(
+    "Checkr production access is disabled. Only staging is permitted."
+  );
+}
 
   if (!apiKey) {
     throw new Error("CHECKR_API_KEY is not configured");
@@ -27,8 +35,32 @@ async function getCheckrAccount() {
   const response = await getCheckrClient().get("/account");
   return response.data;
 }
+async function createCheckrCandidate({ firstName, lastName, email }) {
+  if (!firstName || !lastName || !email) {
+    throw new Error("First name, last name, and email are required");
+  }
 
-async function createCheckrInvitation({ candidateId, packageSlug }) {
+  const params = new URLSearchParams();
+  params.set("first_name", firstName);
+  params.set("last_name", lastName);
+  params.set("email", email);
+
+  const response = await getCheckrClient().post(
+    "/candidates",
+    params.toString(),
+    {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    }
+  );
+
+  return response.data;
+}
+async function createCheckrInvitation({
+  candidateId,
+  packageSlug = CHECKR_PACKAGE_SLUG,
+}) {
   if (!candidateId || !packageSlug) {
     throw new Error("candidateId and packageSlug are required");
   }
@@ -36,6 +68,9 @@ async function createCheckrInvitation({ candidateId, packageSlug }) {
   const params = new URLSearchParams();
   params.set("candidate_id", candidateId);
   params.set("package", packageSlug);
+params.set("work_locations[][country]", "US");
+params.set("work_locations[][state]", "GA");
+params.set("work_locations[][city]", "Atlanta");
 
   const response = await getCheckrClient().post(
     "/invitations",
@@ -64,6 +99,7 @@ async function getCheckrReport(reportId) {
 
 module.exports = {
   getCheckrAccount,
+createCheckrCandidate,
   createCheckrInvitation,
   getCheckrReport,
 };

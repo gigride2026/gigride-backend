@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
 const { notifyUser } = require("../utils/pushNotifications.cjs");
+const { SCREENING_FEE_CENTS, getDriverBackgroundCheck, needsScreeningFee, reserveDriverScreeningFee } = require("../services/driverBackgroundChecks.cjs");
 
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
@@ -348,7 +349,7 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
     const { data: booking, error: bookingError } = await supabaseAdmin
       .from("bookings")
       .select(
-        "id, host_id, driver_id, status, total_price_cents, deposit_amount_cents, payment_status, deposit_paid"
+        "id, host_id, driver_id, status, host_approved, total_price_cents, deposit_amount_cents, payment_status, deposit_paid"
       )
       .eq("id", booking_id)
       .maybeSingle();
@@ -378,6 +379,7 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
     ) {
       return res.status(409).json({ error: "Rental payment is already paid." });
     }
+
 
     let squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
     let squareLocationId = process.env.SQUARE_LOCATION_ID;
@@ -596,6 +598,327 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
     });
   }
 });
+// Create a separate Square checkout for the driver's one-time
+// $39.49 background-check fee including MVR, paid to GigRide.
+router.post(
+  "/create-background-check-payment-link",
+  authMiddleware,
+  async (req, res) => {
+    if (process.env.CHECKR_SCREENING_CHECKOUT_ENABLED !== "true") {
+      return res.status(503).json({
+        error: "Background-check checkout is not enabled yet.",
+      });
+    }
+
+    try {
+      const driverId = req.user?.id;
+      const bookingId = req.body?.booking_id;
+
+      if (!driverId || !bookingId) {
+        return res.status(400).json({
+          error: "Authenticated driver and booking ID are required.",
+        });
+      }
+
+      const { data: booking, error: bookingError } = await supabaseAdmin
+        .from("bookings")
+        .select("id, driver_id, host_approved, status")
+        .eq("id", bookingId)
+        .eq("driver_id", driverId)
+        .maybeSingle();
+
+      if (bookingError) throw bookingError;
+
+      if (!booking || booking.host_approved !== true) {
+        return res.status(403).json({
+          error: "An approved booking is required.",
+        });
+      }
+
+      const existing = await getDriverBackgroundCheck(
+        supabaseAdmin,
+        driverId
+      );
+
+      if (
+        existing?.fee_payment_status === "paid" ||
+        existing?.fee_payment_status === "refunded"
+      ) {
+        return res.status(409).json({
+          error: "Screening fee has already been processed.",
+        });
+      }
+
+      // Reuse the original checkout only after checking Square.
+if (existing?.fee_checkout_url || existing?.fee_payment_link_id) {
+  if (!existing?.fee_checkout_url || !existing?.fee_payment_link_id) {
+    return res.status(409).json({
+      error: "Existing screening checkout is incomplete and requires reconciliation.",
+    });
+  }
+  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    throw new Error("GigRide Square credentials are missing");
+  }
+
+  const linkResponse = await fetch(
+    `${SQUARE_BASE_URL}/v2/online-checkout/payment-links/${encodeURIComponent(
+      existing.fee_payment_link_id
+    )}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Square-Version": SQUARE_VERSION,
+      },
+    }
+  );
+
+  if (!linkResponse.ok) {
+    throw new Error("Unable to verify existing Square checkout");
+  }
+
+  const linkJson = await linkResponse.json();
+  const squareLink = linkJson?.payment_link;
+
+  if (
+    !squareLink ||
+    squareLink.id !== existing.fee_payment_link_id ||
+    !squareLink.order_id
+  ) {
+    throw new Error("Existing Square checkout is invalid");
+  }
+
+// Retrieve the exact Square order associated with this checkout.
+const orderResponse = await fetch(
+  `${SQUARE_BASE_URL}/v2/orders/${encodeURIComponent(squareLink.order_id)}`,
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Square-Version": SQUARE_VERSION,
+    },
+  }
+);
+
+if (!orderResponse.ok) {
+  throw new Error("Unable to verify screening checkout order");
+}
+
+const orderJson = await orderResponse.json();
+const squareOrder = orderJson?.order;
+
+if (
+  !squareOrder ||
+  squareOrder.id !== squareLink.order_id ||
+  squareOrder.total_money?.amount !== SCREENING_FEE_CENTS ||
+  squareOrder.total_money?.currency !== "USD"
+) {
+  throw new Error("Existing screening checkout order is invalid");
+}
+// A completed Square order must never be offered for payment again.
+if (squareOrder.state === "COMPLETED") {
+  return res.status(409).json({
+    error: "Screening checkout order has already been completed.",
+  });
+}
+// Inspect payments recorded against this specific Square order.
+const orderTenders = squareOrder.tenders || [];
+
+for (const tender of orderTenders) {
+  if (!tender.payment_id) {
+    return res.status(409).json({
+      error: "Screening checkout has an unresolved tender.",
+    });
+  }
+
+  const paymentResponse = await fetch(
+    `${SQUARE_BASE_URL}/v2/payments/${encodeURIComponent(tender.payment_id)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Square-Version": SQUARE_VERSION,
+      },
+    }
+  );
+
+  if (!paymentResponse.ok) {
+    throw new Error("Unable to verify screening order payment");
+  }
+
+  const paymentJson = await paymentResponse.json();
+  const orderPayment = paymentJson?.payment;
+
+  if (!orderPayment || orderPayment.order_id !== squareOrder.id) {
+    throw new Error("Screening order payment verification failed");
+  }
+
+  return res.status(409).json({
+    error: "Screening checkout already has a payment or payment attempt.",
+  });
+}
+// Reuse only an open checkout with no recorded tenders.
+if (
+  squareOrder.state === "OPEN" &&
+  orderTenders.length === 0
+) {
+  return res.json({
+    payment_link_id: existing.fee_payment_link_id,
+    checkout_url: existing.fee_checkout_url,
+  });
+}
+
+// Fail closed for unknown or unresolved payment states.
+return res.status(409).json({
+  error: "Screening checkout payment status requires verification.",
+});
+}
+
+      const reservation = await reserveDriverScreeningFee(
+        supabaseAdmin,
+        driverId,
+        bookingId
+      );
+
+// Retrieve the reservation's original booking ID.
+// A driver may retry checkout from a different approved booking.
+const { data: reservedScreening, error: reservationError } =
+  await supabaseAdmin
+    .from("driver_background_checks")
+    .select("first_booking_id")
+    .eq("id", reservation.reservation_id)
+    .eq("driver_id", driverId)
+    .single();
+
+if (reservationError || !reservedScreening?.first_booking_id) {
+  throw new Error("Unable to verify original screening booking");
+}
+
+const screeningBookingId = reservedScreening.first_booking_id;
+
+      if (reservation.fee_cents !== SCREENING_FEE_CENTS) {
+        throw new Error("Unexpected screening fee amount");
+      }
+
+      const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+      const locationId = process.env.SQUARE_LOCATION_ID;
+
+      if (!accessToken || !locationId) {
+        throw new Error("GigRide Square credentials are missing");
+      }
+
+      // Stable across retries for the same driver reservation.
+      const idempotencyKey = crypto
+        .createHash("sha256")
+        .update(`screening:${reservation.reservation_id}`)
+        .digest("hex");
+
+      const response = await fetch(
+        `${SQUARE_BASE_URL}/v2/online-checkout/payment-links`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            "Square-Version": SQUARE_VERSION,
+          },
+          body: JSON.stringify({
+            idempotency_key: idempotencyKey,
+            order: {
+              location_id: locationId,
+              line_items: [
+                {
+                  name: "GigRide Driver Background Check",
+                  quantity: "1",
+                  base_price_money: {
+                    amount: SCREENING_FEE_CENTS,
+                    currency: "USD",
+                  },
+                },
+              ],
+              metadata: {
+                payment_type: "background_check",
+                booking_id: String(screeningBookingId),
+                driver_id: String(driverId),
+                reservation_id: String(reservation.reservation_id),
+              },
+            },
+          }),
+        }
+      );
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "SCREENING SQUARE CHECKOUT ERROR:",
+          json?.errors?.[0]?.code || response.status
+        );
+
+        return res.status(502).json({
+          error: "Unable to create background-check checkout.",
+        });
+      }
+
+      const paymentLinkId = json?.payment_link?.id;
+      const checkoutUrl = json?.payment_link?.url;
+
+      if (!paymentLinkId || !checkoutUrl) {
+        throw new Error("Square returned an incomplete payment link");
+      }
+
+      const { data: saved, error: saveError } = await supabaseAdmin
+        .from("driver_background_checks")
+        .update({
+          fee_payment_link_id: paymentLinkId,
+          fee_checkout_url: checkoutUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", reservation.reservation_id)
+        .eq("driver_id", driverId)
+        .eq("fee_payment_status", "pending")
+        .is("fee_payment_link_id", null)
+        .select("fee_payment_link_id, fee_checkout_url")
+        .maybeSingle();
+
+      if (saveError) throw saveError;
+
+      if (!saved) {
+        // Another request may have saved the checkout first,
+        // or the fee may have been paid in the meantime.
+        const latest = await getDriverBackgroundCheck(
+          supabaseAdmin,
+          driverId
+        );
+
+        if (latest?.fee_payment_status !== "pending") {
+          return res.status(409).json({
+            error: "Screening payment state has changed.",
+          });
+        }
+
+        if (!latest?.fee_checkout_url || !latest?.fee_payment_link_id) {
+          throw new Error("Unable to confirm saved checkout");
+        }
+
+        return res.json({
+          payment_link_id: latest.fee_payment_link_id,
+          checkout_url: latest.fee_checkout_url,
+        });
+      }
+
+      return res.json({
+        payment_link_id: saved.fee_payment_link_id,
+        checkout_url: saved.fee_checkout_url,
+      });
+    } catch (error) {
+      console.error("SCREENING CHECKOUT ERROR:", error.message);
+
+      return res.status(500).json({
+        error: "Unable to prepare background-check checkout.",
+      });
+    }
+  }
+);
 
 router.post("/webhook", async (req, res) => {
   try {
@@ -739,11 +1062,12 @@ const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
 
     const orderJson = await orderRes.json();
 
-    if (!orderRes.ok) {
-      console.log("SQUARE ORDER FETCH ERROR:", orderJson);
-      return res.json({ ok: true, ignored: "Order fetch failed" });
-    }
-
+if (!orderRes.ok) {
+  console.error("SQUARE ORDER FETCH ERROR:", orderJson);
+  return res.status(503).json({
+    error: "Square order lookup failed; retry required",
+  });
+}
     const metadata = orderJson?.order?.metadata || {};
     const bookingId = metadata.booking_id;
     const paymentType = metadata.payment_type;
@@ -751,6 +1075,118 @@ const paymentRes = await fetch(`${SQUARE_BASE_URL}/v2/payments/${paymentId}`, {
     if (!bookingId || !paymentType) {
       return res.json({ ok: true, ignored: "Missing booking metadata" });
     }
+// Process GigRide's one-time driver background-check payment separately.
+if (paymentType === "background_check") {
+  const reservationId = metadata.reservation_id;
+  const driverId = metadata.driver_id;
+  const paidAmountCents = Number(payment?.amount_money?.amount);
+  const paidCurrency = payment?.amount_money?.currency;
+
+  if (!isPlatformMerchant) {
+    console.error("SCREENING PAYMENT MERCHANT MISMATCH", paymentId);
+    return res.json({ ok: true, ignored: "Wrong screening merchant" });
+  }
+
+  if (
+    !reservationId ||
+    !driverId ||
+    !bookingId ||
+    paidAmountCents !== SCREENING_FEE_CENTS ||
+    paidCurrency !== "USD"
+  ) {
+    console.error("SCREENING PAYMENT DETAILS INVALID", paymentId);
+    return res.json({ ok: true, ignored: "Invalid screening payment" });
+  }
+  // Verify the payment belongs to this driver's saved Square checkout.
+  const { data: screening, error: screeningError } =
+    await supabaseAdmin
+      .from("driver_background_checks")
+      .select("id, driver_id, first_booking_id, fee_payment_link_id")
+      .eq("id", reservationId)
+      .maybeSingle();
+
+  if (screeningError) {
+    console.error("SCREENING RESERVATION LOOKUP ERROR:", screeningError.message);
+    return res.status(500).json({
+      error: "Unable to verify screening reservation",
+    });
+  }
+
+  if (
+    !screening ||
+    String(screening.driver_id) !== String(driverId) ||
+    String(screening.first_booking_id) !== String(bookingId)
+  ) {
+    return res.json({
+      ok: true,
+      ignored: "Screening reservation mismatch",
+    });
+  }
+
+  // If the checkout link has not been saved yet, retry this webhook later.
+  if (!screening.fee_payment_link_id) {
+    return res.status(503).json({
+      error: "Screening checkout not yet recorded",
+    });
+  }
+
+  const linkResponse = await fetch(
+    `${SQUARE_BASE_URL}/v2/online-checkout/payment-links/${encodeURIComponent(
+      screening.fee_payment_link_id
+    )}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        "Square-Version": SQUARE_VERSION,
+      },
+    }
+  );
+
+  if (!linkResponse.ok) {
+    console.error("SCREENING PAYMENT LINK LOOKUP FAILED:", linkResponse.status);
+    return res.status(503).json({
+      error: "Unable to verify Square screening checkout",
+    });
+  }
+
+  const linkJson = await linkResponse.json();
+  const expectedOrderId = linkJson?.payment_link?.order_id;
+
+  if (!expectedOrderId || String(expectedOrderId) !== String(orderId)) {
+    console.error("SCREENING PAYMENT ORDER MISMATCH:", paymentId);
+    return res.json({
+      ok: true,
+      ignored: "Screening payment does not match checkout order",
+    });
+  }
+  const { data: result, error } = await supabaseAdmin.rpc(
+    "apply_driver_screening_payment",
+    {
+      p_reservation_id: reservationId,
+      p_driver_id: driverId,
+      p_booking_id: bookingId,
+      p_payment_id: paymentId,
+      p_amount_cents: paidAmountCents,
+    }
+  );
+
+  if (error) {
+    console.error("SCREENING PAYMENT APPLY ERROR:", error.message);
+    return res.status(500).json({ error: "Screening payment update failed" });
+  }
+
+  console.log("SCREENING PAYMENT RECORDED:", {
+    reservationId,
+    driverId,
+    duplicate: result?.duplicate === true,
+  });
+
+  return res.json({
+    ok: true,
+    screening_payment_recorded: true,
+    duplicate: result?.duplicate === true,
+  });
+}
 
     if (!["deposit", "rental"].includes(paymentType)) {
       console.error("SQUARE WEBHOOK INVALID PAYMENT TYPE:", paymentType);
