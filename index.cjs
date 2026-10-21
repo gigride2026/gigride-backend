@@ -79,8 +79,11 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log("ENV HAS ANON KEY =", !!process.env.SUPABASE_ANON_KEY);
   console.log("ENV HAS DIDIT API KEY =", !!process.env.DIDIT_API_KEY);
   console.log("ENV HAS DIDIT WORKFLOW ID =", !!process.env.DIDIT_WORKFLOW_ID);
-
-  startSchedulers();
+  if (process.env.DISABLE_SCHEDULERS !== "true") {
+    startSchedulers();
+  } else {
+    console.log("⏸️ Scheduled jobs disabled for this environment");
+  }
 });
 
 module.exports = app;
