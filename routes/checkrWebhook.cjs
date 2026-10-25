@@ -114,6 +114,7 @@ const { data: screeningStatus, error: updateError } =
     p_report_status: report.status,
     p_report_result: report.result ?? null,
     p_completed_at: report.completed_at ?? null,
+    p_revised_at: report.revised_at ?? null,
   });
 
 if (updateError) {

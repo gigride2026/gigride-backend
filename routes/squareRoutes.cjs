@@ -4,8 +4,13 @@ const crypto = require("crypto");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
 const { notifyUser } = require("../utils/pushNotifications.cjs");
-const { SCREENING_FEE_CENTS, getDriverBackgroundCheck, needsScreeningFee, reserveDriverScreeningFee } = require("../services/driverBackgroundChecks.cjs");
-
+const {
+  SCREENING_FEE_CENTS,
+  getDriverBackgroundCheck,
+  needsScreeningFee,
+  reserveDriverScreeningFee,
+  isRentalScreeningEligible,
+} = require("../services/driverBackgroundChecks.cjs");
 const SQUARE_BASE_URL =
   process.env.SQUARE_ENVIRONMENT === "production"
     ? "https://connect.squareup.com"
@@ -380,7 +385,25 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
       return res.status(409).json({ error: "Rental payment is already paid." });
     }
 
+    if (payment_type === "rental") {
+      if (booking.host_approved !== true) {
+        return res.status(409).json({
+          error: "Host approval is required before rental payment.",
+        });
+      }
 
+      const screening = await getDriverBackgroundCheck(
+        supabaseAdmin,
+        driverId
+      );
+
+if (!isRentalScreeningEligible(screening)) {
+  return res.status(409).json({
+    error:
+      "Background check must be paid and approved before rental payment.",
+  });
+}
+    }
     let squareAccessToken = process.env.SQUARE_ACCESS_TOKEN;
     let squareLocationId = process.env.SQUARE_LOCATION_ID;
 

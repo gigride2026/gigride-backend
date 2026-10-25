@@ -283,3 +283,231 @@ test("Checkr webhook returns 503 when Supabase update fails", async () => {
     }
   }
 });
+
+test("Checkr webhook rejects requests without a signature", async () => {
+  const originalKey = process.env.CHECKR_API_KEY;
+  process.env.CHECKR_API_KEY = "gigride_unsigned_test_only";
+
+  const router = require("../routes/checkrWebhook.cjs");
+  const app = express();
+
+  app.use(express.json({
+    verify(req, res, buffer) {
+      req.rawBody = Buffer.from(buffer);
+    },
+  }));
+
+  app.use("/api/checkr", router);
+
+  const server = app.listen(0, "127.0.0.1");
+
+  try {
+    await new Promise(resolve => server.once("listening", resolve));
+
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/checkr/webhook`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "report.completed",
+          data: { object: { id: "unsigned-test-report" } },
+        }),
+      }
+    );
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      error: "Invalid Checkr webhook signature",
+    });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+
+    if (originalKey === undefined) {
+      delete process.env.CHECKR_API_KEY;
+    } else {
+      process.env.CHECKR_API_KEY = originalKey;
+    }
+  }
+});
+
+test("Checkr webhook rejects an incorrect signature", async () => {
+  const originalKey = process.env.CHECKR_API_KEY;
+  process.env.CHECKR_API_KEY = "gigride_correct_test_key";
+
+  const app = express();
+  app.use(express.json({
+    verify(req, res, buffer) {
+      req.rawBody = Buffer.from(buffer);
+    },
+  }));
+  app.use("/api/checkr", require("../routes/checkrWebhook.cjs"));
+
+  const server = app.listen(0, "127.0.0.1");
+
+  try {
+    await new Promise(resolve => server.once("listening", resolve));
+
+    const body = JSON.stringify({
+      type: "report.completed",
+      data: { object: { id: "invalid-signature-test" } },
+    });
+
+    const incorrectSignature = crypto
+      .createHmac("sha256", "wrong_test_key")
+      .update(body)
+      .digest("hex");
+
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/checkr/webhook`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Checkr-Signature": incorrectSignature,
+        },
+        body,
+      }
+    );
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      error: "Invalid Checkr webhook signature",
+    });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+
+    if (originalKey === undefined) {
+      delete process.env.CHECKR_API_KEY;
+    } else {
+      process.env.CHECKR_API_KEY = originalKey;
+    }
+  }
+});
+
+test("Checkr webhook accepts a duplicate completed report", async () => {
+  const originalLoad = Module._load;
+  const originalKey = process.env.CHECKR_API_KEY;
+  const testKey = "gigride_duplicate_test_only";
+  let rpcCalls = 0;
+
+  process.env.CHECKR_API_KEY = testKey;
+
+  try {
+    Module._load = function (request, parent, isMain) {
+      if (
+        request === "../services/checkrClient.cjs" &&
+        parent?.filename?.endsWith("checkrWebhook.cjs")
+      ) {
+        return {
+          async getCheckrReport() {
+            return {
+              id: "duplicate-test-report",
+              candidate_id: "duplicate-test-candidate",
+              status: "complete",
+              result: "clear",
+            };
+          },
+        };
+      }
+
+      if (
+        request === "../utils/supabaseAdmin.cjs" &&
+        parent?.filename?.endsWith("checkrWebhook.cjs")
+      ) {
+        return {
+          supabaseAdmin: {
+            from() {
+              return {
+                select() {
+                  return {
+                    eq() {
+                      return {
+                        async maybeSingle() {
+                          return {
+                            data: {
+                              id: "duplicate-test-screening",
+                              checkr_report_id: "duplicate-test-report",
+                            },
+                            error: null,
+                          };
+                        },
+                      };
+                    },
+                  };
+                },
+              };
+            },
+            async rpc(name) {
+              assert.equal(name, "apply_checkr_report_update");
+              rpcCalls++;
+              return {
+                data: { duplicate: true, status: "review_required" },
+                error: null,
+              };
+            },
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const routerPath = require.resolve("../routes/checkrWebhook.cjs");
+    delete require.cache[routerPath];
+    const router = require(routerPath);
+    Module._load = originalLoad;
+
+    const app = express();
+    app.use(express.json({
+      verify(req, res, buffer) {
+        req.rawBody = Buffer.from(buffer);
+      },
+    }));
+    app.use("/api/checkr", router);
+
+    const server = app.listen(0, "127.0.0.1");
+
+    try {
+      await new Promise(resolve => server.once("listening", resolve));
+
+      const body = JSON.stringify({
+        type: "report.completed",
+        data: { object: { id: "duplicate-test-report" } },
+      });
+
+      const signature = crypto
+        .createHmac("sha256", testKey)
+        .update(body)
+        .digest("hex");
+
+      const response = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/checkr/webhook`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Checkr-Signature": signature,
+          },
+          body,
+        }
+      );
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        ok: true,
+        processed: true,
+      });
+      assert.equal(rpcCalls, 1);
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  } finally {
+    Module._load = originalLoad;
+    if (originalKey === undefined) {
+      delete process.env.CHECKR_API_KEY;
+    } else {
+      process.env.CHECKR_API_KEY = originalKey;
+    }
+  }
+});

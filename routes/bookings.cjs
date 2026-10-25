@@ -6,6 +6,11 @@ console.log("✅ bookings routes loaded");
 const express = require("express");
 const { createClient } = require("@supabase/supabase-js");
 const { notifyUser } = require("../utils/pushNotifications.cjs");
+const {
+  getDriverBackgroundCheck,
+  needsScreeningFee,
+  reserveDriverScreeningFee,
+} = require("../services/driverBackgroundChecks.cjs");
 
 const router = express.Router();
 
@@ -213,14 +218,10 @@ router.patch("/:id/host-approve", async (req, res) => {
         debug: { raw, clean },
       });
     }
-
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("bookings")
-      .update({ status: "pending", host_approved: true })
-      .eq("id", bookingId)
-      .select("*")
-      .single();
-
+const { data: approvalResult, error: updErr } = await supabaseAdmin
+  .rpc("approve_booking_with_screening", {
+    p_booking_id: bookingId,
+  });
     if (updErr) {
       return res.status(400).json({
         error: "Update failed",
@@ -228,7 +229,28 @@ router.patch("/:id/host-approve", async (req, res) => {
       });
     }
 
-    return res.json({ ok: true, booking: updated });
+if (!approvalResult) {
+  return res.status(409).json({
+    error: "Booking approval returned no result.",
+  });
+}
+const { data: updatedBooking, error: bookingErr } = await supabaseAdmin
+  .from("bookings")
+  .select("*")
+  .eq("id", bookingId)
+  .single();
+
+if (bookingErr || !updatedBooking) {
+  return res.status(500).json({
+    error: "Booking approved, but failed to retrieve updated booking.",
+  });
+}
+
+return res.json({
+  ok: true,
+  booking: updatedBooking,
+  approval: approvalResult,
+});
   } catch (e) {
     console.error("APPROVE ERROR:", e);
     return res.status(500).json({ error: e.message || "Server error" });

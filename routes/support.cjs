@@ -321,6 +321,65 @@ router.post("/customer/cases/:caseId/messages", authMiddleware, async (req, res)
   }
 });
 router.use(authMiddleware, requireStaff);
+// Owner-only Checkr screening review.
+router.post("/screenings/:id/review", requireOwner, async (req, res) => {
+  try {
+    const screeningId = String(req.params.id || "").trim();
+    const decision = String(req.body?.decision || "").trim();
+    const notes = String(req.body?.notes || "").trim();
+
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(screeningId)
+    ) {
+      return res.status(400).json({ error: "Invalid screening ID" });
+    }
+
+    if (!["approved", "adverse_action_pending"].includes(decision)) {
+      return res.status(400).json({ error: "Invalid review decision" });
+    }
+
+    if (!notes || notes.length > 2000) {
+      return res.status(400).json({
+        error: "Review notes are required (maximum 2000 characters)",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "review_driver_screening",
+      {
+        p_screening_id: screeningId,
+        p_reviewer_id: req.user.id,
+        p_decision: decision,
+        p_notes: notes,
+      }
+    );
+
+    if (error) {
+      console.error("CHECKR OWNER REVIEW ERROR:", error.message);
+
+      if (
+        /authorization|required|not eligible|already has|not found|invalid/i.test(
+          error.message
+        )
+      ) {
+        return res.status(409).json({
+          error: "Screening review could not be completed",
+        });
+      }
+
+      return res.status(500).json({
+        error: "Unable to save screening review",
+      });
+    }
+
+    return res.json({ ok: true, review: data });
+  } catch (error) {
+    console.error("CHECKR OWNER REVIEW ERROR:", error);
+    return res.status(500).json({
+      error: "Unable to save screening review",
+    });
+  }
+});
 
 // Owner-only staff management.
 router.post("/staff/invite", requireOwner, async (req, res) => {
@@ -332,7 +391,6 @@ router.post("/staff/invite", requireOwner, async (req, res) => {
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
-console.log("SUPPORT INVITE GENERATED CODE:", { email, code });
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
