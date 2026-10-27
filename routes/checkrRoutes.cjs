@@ -1,7 +1,6 @@
 const express = require("express");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
-const { requireOwner } = require("../middlewares/staffAuth.cjs");
 const {
   getCheckrAccount,
   createCheckrCandidate,
@@ -30,42 +29,9 @@ router.get("/status", async (req, res) => {
     });
   }
 });
-// Temporary staging-only Checkr package lookup (read-only)
 
-router.get("/test-packages", requireOwner, async (req, res) => {
-  try {
-    if (process.env.CHECKR_ENVIRONMENT !== "staging") {
-      return res.status(403).json({
-        error: "Only available in Checkr staging"
-      });
-    }
 
-    const axios = require("axios");
 
-    const response = await axios.get(
-      "https://api.checkr-staging.com/v1/packages",
-      {
-        auth: {
-          username: process.env.CHECKR_API_KEY,
-          password: ""
-        },
-        timeout: 20000
-      }
-    );
-
-    return res.json(response.data);
-  } catch (error) {
-    console.error(
-      "Checkr package lookup failed:",
-      error.response?.status || error.message
-    );
-
-    return res.status(502).json({
-      error: "Checkr package lookup failed",
-      checkrStatus: error.response?.status || null
-    });
-  }
-});
 // Authenticated Checkr API connection test (read-only)
 router.get("/test-connection", async (req, res) => {
   try {
