@@ -17,6 +17,9 @@ function isRentalScreeningEligible(screening) {
   if (!screening) return false;
 
   const feePaid = screening.fee_payment_status === "paid";
+  const hasCheckrReport = Boolean(
+    String(screening.checkr_report_id || "").trim()
+  );
   const reportComplete = screening.checkr_report_status === "complete";
   const noConflict = screening.report_conflict_hold === false;
 
@@ -33,6 +36,7 @@ function isRentalScreeningEligible(screening) {
 
   return (
     feePaid &&
+    hasCheckrReport &&
     reportComplete &&
     noConflict &&
     (automaticallyCleared || ownerApproved)

@@ -13,6 +13,8 @@ function createMocks({
   claimSucceeds = true,
   candidateFails = false,
   invitationFails = false,
+vehicleCity = "Savannah",
+  vehicleState = "GA",
 } = {}) {
   const calls = {
     claims: 0,
@@ -21,10 +23,10 @@ function createMocks({
     savedCandidates: 0,
     savedInvitations: 0,
   };
-
-  const screening = {
-    status: screeningStatus,
-    fee_payment_status: paymentStatus,
+const screening = {
+  status: screeningStatus,
+  fee_payment_status: paymentStatus,
+  first_booking_id: "booking-test-id",
     checkr_candidate_id: null,
     checkr_invitation_id: null,
     checkr_report_id: null,
@@ -44,7 +46,47 @@ function createMocks({
     },
 
     from(table) {
-      if (table === "profiles") {
+
+if (table === "bookings") {
+  return {
+    select() {
+      return {
+        eq() {
+          return this;
+        },
+        async single() {
+          return {
+            data: { vehicle_id: "vehicle-test-id" },
+            error: null,
+          };
+        },
+      };
+    },
+  };
+}
+
+if (table === "vehicles") {
+  return {
+    select() {
+      return {
+        eq() {
+          return this;
+        },
+        async single() {
+          return {
+
+data: {
+  city: vehicleCity,
+  state: vehicleState,
+},
+            error: null,
+          };
+        },
+      };
+    },
+  };
+}
+ if (table === "profiles") {
         return {
           select() {
             return {
@@ -119,8 +161,12 @@ function createMocks({
       return { id: "candidate-test-id" };
     },
 
-    async createCheckrInvitation() {
-      calls.invitations++;
+async createCheckrInvitation({ candidateId, city, state }) {
+  assert.equal(candidateId, "candidate-test-id");
+  assert.equal(city, vehicleCity.trim());
+  assert.equal(state, vehicleState.trim().toUpperCase());
+
+  calls.invitations++;
 
       if (invitationFails) {
         throw new Error("Invitation creation failed");
@@ -269,10 +315,45 @@ test("invitation failure is reported without automatic retry", async () => {
         /Invitation creation failed/
       );
 
-      assert.equal(calls.claims, 1);
-      assert.equal(calls.candidates, 1);
-      assert.equal(calls.savedCandidates, 1);
+assert.equal(calls.claims, 1);
+assert.equal(calls.candidates, 1);
+assert.equal(calls.savedCandidates, 1);
+assert.equal(calls.invitations, 1);
+  }
+);
+});
+test("Florida booking sends Jacksonville location to Checkr", async () => {
+  await withMockedService(
+    {
+      vehicleCity: "Jacksonville",
+      vehicleState: "FL",
+    },
+    async (start, calls) => {
+      const result = await start("driver-test-id");
+
+      assert.equal(result.success, true);
+      assert.equal(result.status, "invitation_created");
+
       assert.equal(calls.invitations, 1);
+    }
+  );
+});
+
+test("missing vehicle state blocks Checkr screening", async () => {
+  await withMockedService(
+    {
+      vehicleCity: "Savannah",
+      vehicleState: "",
+    },
+    async (start, calls) => {
+      await assert.rejects(
+        start("driver-test-id"),
+        /Valid vehicle city and two-letter state code are required/
+      );
+
+      assert.equal(calls.claims, 0);
+      assert.equal(calls.candidates, 0);
+      assert.equal(calls.invitations, 0);
     }
   );
 });

@@ -25,6 +25,7 @@ async function withMockedWorker(options, callback) {
   const calls = {
     queries: 0,
     started: [],
+    authorizationFilters: 0,
   };
 
   process.env.CHECKR_SCREENING_WORKER_ENABLED =
@@ -42,6 +43,13 @@ async function withMockedWorker(options, callback) {
           return this;
         },
         eq() {
+          return this;
+        },
+        not(column, operator, value) {
+          assert.equal(column, "authorization_confirmed_at");
+          assert.equal(operator, "is");
+          assert.equal(value, null);
+          calls.authorizationFilters++;
           return this;
         },
         is() {
@@ -210,6 +218,19 @@ test("worker propagates database query errors", async () => {
 );
 
       assert.equal(calls.queries, 1);
+      assert.deepEqual(calls.started, []);
+    }
+  );
+});
+
+test("worker requires the authorization timestamp filter", async () => {
+  await withMockedWorker(
+    { driverIds: [] },
+    async (run, calls) => {
+      await run();
+
+      assert.equal(calls.queries, 1);
+      assert.equal(calls.authorizationFilters, 1);
       assert.deepEqual(calls.started, []);
     }
   );

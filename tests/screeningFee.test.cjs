@@ -43,3 +43,39 @@ test("Refunded screening fees do not trigger automatic repayment", () => {
     false
   );
 });
+
+const {
+  isRentalScreeningEligible,
+} = require("../services/driverBackgroundChecks.cjs");
+
+test("A simulated report without a Checkr report ID cannot unlock rental payment", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "review_required",
+    checkr_report_status: "complete",
+    checkr_report_result: "consider",
+    checkr_report_id: null,
+    report_conflict_hold: false,
+    review_decision: "approved",
+    reviewed_by: "owner-test-id",
+    reviewed_at: "2026-10-25T16:32:51Z",
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), false);
+});
+
+test("An approved consider report with a Checkr report ID can be rental eligible", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "review_required",
+    checkr_report_status: "complete",
+    checkr_report_result: "consider",
+    checkr_report_id: "report-test-id",
+    report_conflict_hold: false,
+    review_decision: "approved",
+    reviewed_by: "owner-test-id",
+    reviewed_at: "2026-10-25T16:32:51Z",
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), true);
+});

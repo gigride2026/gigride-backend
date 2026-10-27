@@ -25,6 +25,7 @@ async function processPaidScreenings() {
     .from("driver_background_checks")
     .select("driver_id")
     .eq("fee_payment_status", "paid")
+    .not("authorization_confirmed_at", "is", null)
     .eq("status", "not_started")
     .is("screening_started_at", null)
     .is("checkr_candidate_id", null)

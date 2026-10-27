@@ -57,21 +57,37 @@ async function createCheckrCandidate({ firstName, lastName, email }) {
 
   return response.data;
 }
+
 async function createCheckrInvitation({
   candidateId,
   packageSlug = CHECKR_PACKAGE_SLUG,
+  city,
+  state,
 }) {
   if (!candidateId || !packageSlug) {
     throw new Error("candidateId and packageSlug are required");
   }
 
+if (
+  typeof city !== "string" ||
+  !city.trim() ||
+  typeof state !== "string" ||
+  !/^[A-Za-z]{2}$/.test(state.trim())
+) {
+  throw new Error(
+    "A valid vehicle city and two-letter state code are required for Checkr"
+  );
+}
+
+city = city.trim();
+state = state.trim().toUpperCase();
+
   const params = new URLSearchParams();
   params.set("candidate_id", candidateId);
   params.set("package", packageSlug);
 params.set("work_locations[][country]", "US");
-params.set("work_locations[][state]", "GA");
-params.set("work_locations[][city]", "Atlanta");
-
+params.set("work_locations[][state]", state);
+params.set("work_locations[][city]", city);
   const response = await getCheckrClient().post(
     "/invitations",
     params.toString(),

@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
+const { requireOwner } = require("../middlewares/staffAuth.cjs");
 const {
   getCheckrAccount,
   createCheckrCandidate,
@@ -9,6 +10,7 @@ const {
 
 const {
   getDriverBackgroundCheck,
+  isRentalScreeningEligible,
 } = require("../services/driverBackgroundChecks.cjs");
 const router = express.Router();
 
@@ -28,7 +30,42 @@ router.get("/status", async (req, res) => {
     });
   }
 });
+// Temporary staging-only Checkr package lookup (read-only)
 
+router.get("/test-packages", requireOwner, async (req, res) => {
+  try {
+    if (process.env.CHECKR_ENVIRONMENT !== "staging") {
+      return res.status(403).json({
+        error: "Only available in Checkr staging"
+      });
+    }
+
+    const axios = require("axios");
+
+    const response = await axios.get(
+      "https://api.checkr-staging.com/v1/packages",
+      {
+        auth: {
+          username: process.env.CHECKR_API_KEY,
+          password: ""
+        },
+        timeout: 20000
+      }
+    );
+
+    return res.json(response.data);
+  } catch (error) {
+    console.error(
+      "Checkr package lookup failed:",
+      error.response?.status || error.message
+    );
+
+    return res.status(502).json({
+      error: "Checkr package lookup failed",
+      checkrStatus: error.response?.status || null
+    });
+  }
+});
 // Authenticated Checkr API connection test (read-only)
 router.get("/test-connection", async (req, res) => {
   try {
@@ -232,4 +269,176 @@ return res.status(500).json({
 });
   }
 });
+
+// Record the authenticated driver's explicit screening acknowledgment.
+// This is not formal Checkr background-check authorization.
+router.post("/acknowledge-screening", async (req, res) => {
+  try {
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    if (req.body?.acknowledged !== true) {
+      return res.status(400).json({
+        error: "Explicit screening acknowledgment is required.",
+        code: "SCREENING_ACKNOWLEDGMENT_REQUIRED",
+      });
+    }
+
+    const bookingId = req.body?.booking_id;
+
+    if (
+      typeof bookingId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bookingId)
+    ) {
+      return res.status(400).json({
+        error: "A valid booking ID is required.",
+        code: "SCREENING_BOOKING_REQUIRED",
+      });
+    }
+
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id")
+      .eq("id", bookingId)
+      .eq("driver_id", driverId)
+      .eq("host_approved", true)
+      .maybeSingle();
+
+    if (bookingError) throw bookingError;
+
+    if (!booking) {
+      return res.status(403).json({
+        error: "An approved booking belonging to this driver is required.",
+        code: "SCREENING_BOOKING_NOT_APPROVED",
+      });
+    }
+
+    const { data: screening, error: lookupError } = await supabaseAdmin
+      .from("driver_background_checks")
+      .select("screening_acknowledged_at")
+      .eq("driver_id", driverId)
+      .maybeSingle();
+
+    if (lookupError) throw lookupError;
+
+    if (!screening) {
+      const { error: insertError } = await supabaseAdmin
+        .from("driver_background_checks")
+        .upsert(
+          {
+            driver_id: driverId,
+            first_booking_id: bookingId,
+            screening_acknowledged_at: new Date().toISOString(),
+            fee_amount_cents: 3949,
+            fee_payment_status: "unpaid",
+            status: "not_started",
+          },
+          {
+            onConflict: "driver_id",
+            ignoreDuplicates: true,
+          }
+        );
+
+      if (insertError) throw insertError;
+
+      const { data: confirmed, error: confirmError } = await supabaseAdmin
+        .from("driver_background_checks")
+        .select("screening_acknowledged_at")
+        .eq("driver_id", driverId)
+        .maybeSingle();
+
+      if (confirmError) throw confirmError;
+
+      if (confirmed?.screening_acknowledged_at) {
+        return res.json({
+          acknowledged: true,
+          already_recorded: false,
+        });
+      }
+
+      return res.status(409).json({
+        error: "Screening acknowledgment could not be confirmed. Please retry.",
+        code: "SCREENING_ACKNOWLEDGMENT_NOT_CONFIRMED",
+      });
+    }
+
+    if (screening.screening_acknowledged_at) {
+      return res.json({
+        acknowledged: true,
+        already_recorded: true,
+      });
+    }
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from("driver_background_checks")
+      .update({
+        screening_acknowledged_at: new Date().toISOString(),
+      })
+      .eq("driver_id", driverId)
+      .is("screening_acknowledged_at", null)
+      .select("screening_acknowledged_at")
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    if (!updated?.screening_acknowledged_at) {
+      return res.status(409).json({
+        error: "Screening acknowledgment could not be confirmed. Please retry.",
+        code: "SCREENING_ACKNOWLEDGMENT_NOT_CONFIRMED",
+      });
+    }
+
+    return res.json({
+      acknowledged: true,
+      already_recorded: false,
+    });
+  } catch (error) {
+    console.error("SCREENING ACKNOWLEDGMENT ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to record screening acknowledgment.",
+    });
+  }
+});
+
+// Read-only screening status for the authenticated driver.
+router.get("/my-screening", async (req, res) => {
+  try {
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+
+    const screening = await getDriverBackgroundCheck(supabaseAdmin, driverId);
+
+    if (!screening) {
+      return res.json({
+        screening_required: true,
+        fee_paid: false,
+        fee_pending: false,
+        screening_acknowledged: false,
+        screening_status: "not_started",
+        rental_eligible: false,
+      });
+    }
+
+    return res.json({
+      screening_required: true,
+      fee_paid: screening.fee_payment_status === "paid",
+      fee_pending: screening.fee_payment_status === "pending",
+      screening_acknowledged: Boolean(screening.screening_acknowledged_at),
+      screening_status: screening.status,
+      rental_eligible: isRentalScreeningEligible(screening),
+    });
+  } catch (error) {
+    console.error("SCREENING STATUS ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to retrieve screening status.",
+    });
+  }
+});
+
 module.exports = router;

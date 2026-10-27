@@ -27,6 +27,47 @@ async function startDriverScreening(driverId) {
     throw new Error("Screening fee has not been paid");
   }
 
+if (!screening.first_booking_id) {
+  throw new Error(
+    "First approved booking is required for Checkr screening"
+  );
+}
+
+const { data: booking, error: bookingError } = await supabaseAdmin
+  .from("bookings")
+  .select("vehicle_id")
+  .eq("id", screening.first_booking_id)
+  .eq("driver_id", driverId)
+  .single();
+
+if (bookingError || !booking?.vehicle_id) {
+  throw new Error(
+    "Approved booking or vehicle not found for Checkr screening"
+  );
+}
+
+const { data: vehicle, error: vehicleError } = await supabaseAdmin
+  .from("vehicles")
+  .select("city, state")
+  .eq("id", booking.vehicle_id)
+  .single();
+
+if (
+  vehicleError ||
+  !vehicle ||
+  typeof vehicle.city !== "string" ||
+  !vehicle.city.trim() ||
+  typeof vehicle.state !== "string" ||
+  !/^[A-Za-z]{2}$/.test(vehicle.state.trim())
+) {
+  throw new Error(
+    "Valid vehicle city and two-letter state code are required for Checkr screening"
+  );
+}
+
+const workCity = vehicle.city.trim();
+const workState = vehicle.state.trim().toUpperCase();
+
   if (
     screening.status === "initiating" ||
     screening.checkr_candidate_id ||
@@ -103,9 +144,11 @@ async function startDriverScreening(driverId) {
     throw new Error("Candidate created but could not be saved");
   }
 
-  const invitation = await createCheckrInvitation({
-    candidateId: candidate.id,
-  });
+const invitation = await createCheckrInvitation({
+  candidateId: candidate.id,
+  city: workCity,
+  state: workState,
+});
 
   if (!invitation?.id) {
     throw new Error("Checkr invitation creation failed");
