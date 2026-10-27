@@ -223,14 +223,14 @@ test("worker propagates database query errors", async () => {
   );
 });
 
-test("worker requires the authorization timestamp filter", async () => {
+test("worker does not require authorization before hosted invitation", async () => {
   await withMockedWorker(
     { driverIds: [] },
     async (run, calls) => {
       await run();
 
       assert.equal(calls.queries, 1);
-      assert.equal(calls.authorizationFilters, 1);
+      assert.equal(calls.authorizationFilters, 0);
       assert.deepEqual(calls.started, []);
     }
   );
