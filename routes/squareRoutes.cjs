@@ -923,9 +923,10 @@ const screeningBookingId = reservedScreening.first_booking_id;
           throw new Error("Unable to confirm saved checkout");
         }
 
-        return res.json({
-          payment_link_id: latest.fee_payment_link_id,
-          checkout_url: latest.fee_checkout_url,
+        // Require a fresh request to verify the saved link against Square.
+        // Never return an unverified checkout after a concurrent save.
+        return res.status(409).json({
+          error: "Screening checkout was updated. Please retry to verify its payment status.",
         });
       }
 
