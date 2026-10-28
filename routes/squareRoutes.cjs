@@ -385,7 +385,7 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
       return res.status(409).json({ error: "Rental payment is already paid." });
     }
 
-    if (payment_type === "rental") {
+    if (payment_type === "deposit" || payment_type === "rental") {
       if (booking.host_approved !== true) {
         return res.status(409).json({
           error: "Host approval is required before rental payment.",
