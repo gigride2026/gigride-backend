@@ -19,6 +19,19 @@ router.use(authMiddleware);
 // Safe connection test: does not initiate a background check.
 router.get("/status", async (req, res) => {
   try {
+
+    const invitationStatus = screening.checkr_invitation_status;
+    const invitationExpiresAt = screening.checkr_invitation_expires_at;
+
+    const expirationTime = invitationExpiresAt
+      ? Date.parse(invitationExpiresAt)
+      : null;
+
+    const invitationIsValid =
+      invitationStatus === "pending" &&
+      (!invitationExpiresAt ||
+        (Number.isFinite(expirationTime) &&
+          expirationTime > Date.now()));
     return res.json({
       configured: Boolean(process.env.CHECKR_API_KEY),
       message: "Checkr route is working",
@@ -377,7 +390,6 @@ router.get("/my-screening", async (req, res) => {
     if (!driverId) {
       return res.status(401).json({ error: "Authentication required." });
     }
-
     const screening = await getDriverBackgroundCheck(supabaseAdmin, driverId);
 
     if (!screening) {
@@ -391,12 +403,30 @@ router.get("/my-screening", async (req, res) => {
       });
     }
 
+    const invitationStatus = screening.checkr_invitation_status;
+    const invitationExpiresAt = screening.checkr_invitation_expires_at;
+
+    const expirationTime = invitationExpiresAt
+      ? Date.parse(invitationExpiresAt)
+      : null;
+
+    const invitationIsValid =
+      invitationStatus === "pending" &&
+      (!invitationExpiresAt ||
+        (Number.isFinite(expirationTime) &&
+          expirationTime > Date.now()));
+
     return res.json({
       screening_required: true,
       fee_paid: screening.fee_payment_status === "paid",
       fee_pending: screening.fee_payment_status === "pending",
       screening_acknowledged: Boolean(screening.screening_acknowledged_at),
       screening_status: screening.status,
+checkr_invitation_url: invitationIsValid
+  ? screening.checkr_invitation_url ?? null
+  : null,
+      checkr_invitation_status: screening.checkr_invitation_status ?? null,
+      checkr_invitation_expires_at: screening.checkr_invitation_expires_at ?? null,
       rental_eligible: isRentalScreeningEligible(screening),
     });
   } catch (error) {

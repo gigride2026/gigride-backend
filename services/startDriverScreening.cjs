@@ -157,10 +157,15 @@ const invitation = await createCheckrInvitation({
   const { data: savedInvitation, error: invitationError } =
     await supabaseAdmin
       .from("driver_background_checks")
-      .update({
-        checkr_invitation_id: invitation.id,
-        updated_at: new Date().toISOString(),
-      })
+
+.update({
+  checkr_invitation_id: invitation.id,
+  checkr_invitation_url: invitation.invitation_url ?? null,
+  checkr_invitation_status: invitation.status ?? "pending",
+  checkr_invitation_expires_at: invitation.expires_at ?? null,
+  updated_at: new Date().toISOString(),
+})
+
       .eq("driver_id", driverId)
       .eq("status", "initiating")
       .eq("checkr_candidate_id", candidate.id)

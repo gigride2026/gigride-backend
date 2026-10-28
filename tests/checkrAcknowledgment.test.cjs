@@ -659,12 +659,16 @@ test("screening status returns acknowledgment true for an acknowledged driver", 
           return {
             async getDriverBackgroundCheck(db, driverId) {
               assert.equal(driverId, "acknowledged-driver-id");
-              return {
-                screening_acknowledged_at: "2026-10-26T12:00:00Z",
-                authorization_confirmed_at: null,
-                fee_payment_status: "paid",
-                status: "not_started",
-              };
+
+return {
+  screening_acknowledged_at: "2026-10-26T12:00:00Z",
+  authorization_confirmed_at: null,
+  fee_payment_status: "paid",
+  status: "initiating",
+  checkr_invitation_url: "https://apply.checkr.com/invite/test-driver",
+  checkr_invitation_status: "pending",
+  checkr_invitation_expires_at: "2026-11-04T12:00:00Z",
+};
             },
             isRentalScreeningEligible(screening) {
               assert.equal(screening.authorization_confirmed_at, null);
@@ -687,18 +691,21 @@ test("screening status returns acknowledgment true for an acknowledged driver", 
     server = app.listen(0, "127.0.0.1");
     await new Promise(resolve => server.once("listening", resolve));
 
-    const response = await fetch(
-      `http://127.0.0.1:${server.address().port}/api/checkr/my-screening`
-    );
-
+const response = await fetch(
+  `http://127.0.0.1:${server.address().port}/api/checkr/my-screening?driver_id=another-driver-id`
+);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       screening_required: true,
       fee_paid: true,
       fee_pending: false,
+
+screening_status: "initiating",
+checkr_invitation_url: "https://apply.checkr.com/invite/test-driver",
+checkr_invitation_status: "pending",
+checkr_invitation_expires_at: "2026-11-04T12:00:00Z",
+rental_eligible: false,
       screening_acknowledged: true,
-      screening_status: "not_started",
-      rental_eligible: false,
     });
   } finally {
     Module._load = originalLoad;

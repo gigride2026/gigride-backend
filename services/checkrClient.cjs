@@ -101,6 +101,18 @@ params.set("work_locations[][city]", city);
   return response.data;
 }
 
+async function getCheckrInvitation(invitationId) {
+  if (typeof invitationId !== "string" || !invitationId.trim()) {
+    throw new Error("invitationId is required");
+  }
+
+  const response = await getCheckrClient().get(
+    `/invitations/${encodeURIComponent(invitationId.trim())}`
+  );
+
+  return response.data;
+}
+
 async function getCheckrReport(reportId) {
   if (!reportId) {
     throw new Error("reportId is required");
@@ -117,5 +129,6 @@ module.exports = {
   getCheckrAccount,
 createCheckrCandidate,
   createCheckrInvitation,
+  getCheckrInvitation,
   getCheckrReport,
 };

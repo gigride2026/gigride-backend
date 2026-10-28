@@ -22,6 +22,7 @@ vehicleCity = "Savannah",
     invitations: 0,
     savedCandidates: 0,
     savedInvitations: 0,
+savedInvitationData: null,
   };
 const screening = {
   status: screeningStatus,
@@ -121,12 +122,12 @@ data: {
             select() {
               return {
                 async single() {
-                  if (isCandidate) {
-                    calls.savedCandidates++;
-                  } else {
-                    calls.savedInvitations++;
-                  }
-
+if (isCandidate) {
+  calls.savedCandidates++;
+} else {
+  calls.savedInvitations++;
+  calls.savedInvitationData = { ...values };
+}
                   return {
                     data: { id: "screening-test-id" },
                     error: null,
@@ -172,7 +173,12 @@ async createCheckrInvitation({ candidateId, city, state }) {
         throw new Error("Invitation creation failed");
       }
 
-      return { id: "invitation-test-id" };
+return {
+  id: "invitation-test-id",
+  invitation_url: "https://apply.checkr.com/invite/test-driver",
+  status: "pending",
+  expires_at: "2026-11-04T12:00:00Z",
+};
     },
   };
 
@@ -287,6 +293,25 @@ test("successful screening creates one candidate and invitation", async () => {
     assert.equal(calls.savedCandidates, 1);
     assert.equal(calls.invitations, 1);
     assert.equal(calls.savedInvitations, 1);
+assert.equal(
+  calls.savedInvitationData.checkr_invitation_id,
+  "invitation-test-id"
+);
+
+assert.equal(
+  calls.savedInvitationData.checkr_invitation_url,
+  "https://apply.checkr.com/invite/test-driver"
+);
+
+assert.equal(
+  calls.savedInvitationData.checkr_invitation_status,
+  "pending"
+);
+
+assert.equal(
+  calls.savedInvitationData.checkr_invitation_expires_at,
+  "2026-11-04T12:00:00Z"
+);
   });
 });
 

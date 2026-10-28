@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 
-const { getCheckrReport } = require("../services/checkrClient.cjs");
+const { getCheckrReport, getCheckrInvitation } = require("../services/checkrClient.cjs");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 
 const router = express.Router();
@@ -30,6 +30,44 @@ if (
   return reportId.trim();
 }
 
+function getCheckrExpiredInvitationId(payload) {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    payload.type !== "invitation.expired"
+  ) {
+    return null;
+  }
+
+  const invitationId = payload.data?.object?.id;
+
+  if (typeof invitationId !== "string" || !invitationId.trim()) {
+    return null;
+  }
+
+  return invitationId.trim();
+}
+
+async function verifyExpiredCheckrInvitation(invitationId) {
+  const invitation = await getCheckrInvitation(invitationId);
+
+  if (
+    !invitation ||
+    invitation.id !== invitationId ||
+    invitation.status !== "expired" ||
+    typeof invitation.candidate_id !== "string" ||
+    !invitation.candidate_id.trim()
+  ) {
+    throw new Error("Checkr expired invitation verification failed");
+  }
+
+  return {
+    invitationId,
+    candidateId: invitation.candidate_id.trim(),
+    expiresAt: invitation.expires_at ?? null,
+  };
+}
+
 function verifyCheckrSignature(req) {
   const apiKey = process.env.CHECKR_API_KEY;
   const signature = req.headers["x-checkr-signature"];
@@ -53,11 +91,71 @@ function verifyCheckrSignature(req) {
 
   return crypto.timingSafeEqual(expected, received);
 }
+async function processExpiredCheckrInvitation(invitationId) {
+  const verified = await verifyExpiredCheckrInvitation(invitationId);
+
+  const { data: screening, error: lookupError } = await supabaseAdmin
+    .from("driver_background_checks")
+    .select("id, checkr_candidate_id, checkr_invitation_id, checkr_report_id")
+    .eq("checkr_candidate_id", verified.candidateId)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw lookupError;
+  }
+
+  if (!screening) {
+    throw new Error("No GigRide screening matches Checkr candidate");
+  }
+
+  if (screening.checkr_invitation_id !== verified.invitationId) {
+    throw new Error("Checkr invitation does not match stored screening");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "apply_checkr_invitation_expiration",
+    {
+      p_candidate_id: verified.candidateId,
+      p_invitation_id: verified.invitationId,
+      p_expires_at: verified.expiresAt,
+    }
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || typeof data.updated !== "boolean") {
+    throw new Error("Invalid invitation expiration update response");
+  }
+
+  return data;
+}
+
 router.post("/webhook", async (req, res) => {
   if (!verifyCheckrSignature(req)) {
     return res.status(401).json({
       error: "Invalid Checkr webhook signature",
     });
+  }
+
+  const invitationId = getCheckrExpiredInvitationId(req.body);
+
+  if (invitationId) {
+    try {
+      const result = await processExpiredCheckrInvitation(invitationId);
+
+      return res.status(200).json({
+        ok: true,
+        processed: result.updated,
+      });
+    } catch (error) {
+      console.error("Checkr invitation expiration failed:", error.message);
+
+      return res.status(503).json({
+        error: "Unable to verify Checkr invitation expiration",
+      });
+    }
   }
 
   const reportId = getCheckrReportId(req.body);
