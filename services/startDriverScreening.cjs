@@ -38,6 +38,7 @@ const { data: booking, error: bookingError } = await supabaseAdmin
   .select("vehicle_id")
   .eq("id", screening.first_booking_id)
   .eq("driver_id", driverId)
+  .eq("host_approved", true)
   .single();
 
 if (bookingError || !booking?.vehicle_id) {

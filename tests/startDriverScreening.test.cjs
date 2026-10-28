@@ -13,6 +13,7 @@ function createMocks({
   claimSucceeds = true,
   candidateFails = false,
   invitationFails = false,
+  bookingApproved = true,
 vehicleCity = "Savannah",
   vehicleState = "GA",
 } = {}) {
@@ -49,17 +50,34 @@ const screening = {
     from(table) {
 
 if (table === "bookings") {
+  let requiresHostApproval = false;
+
   return {
     select() {
       return {
-        eq() {
+        eq(column, value) {
+          if (column === "host_approved") {
+            assert.equal(value, true);
+            requiresHostApproval = true;
+          }
           return this;
         },
         async single() {
-          return {
-            data: { vehicle_id: "vehicle-test-id" },
-            error: null,
-          };
+          assert.equal(
+            requiresHostApproval,
+            true,
+            "Booking lookup must require host approval"
+          );
+
+          return bookingApproved
+            ? {
+                data: { vehicle_id: "vehicle-test-id" },
+                error: null,
+              }
+            : {
+                data: null,
+                error: { message: "Approved booking not found" },
+              };
         },
       };
     },
@@ -374,6 +392,22 @@ test("missing vehicle state blocks Checkr screening", async () => {
       await assert.rejects(
         start("driver-test-id"),
         /Valid vehicle city and two-letter state code are required/
+      );
+
+      assert.equal(calls.claims, 0);
+      assert.equal(calls.candidates, 0);
+      assert.equal(calls.invitations, 0);
+    }
+  );
+});
+
+test("unapproved booking cannot initiate Checkr screening", async () => {
+  await withMockedService(
+    { bookingApproved: false },
+    async (start, calls) => {
+      await assert.rejects(
+        start("driver-test-id"),
+        /Approved booking or vehicle not found/
       );
 
       assert.equal(calls.claims, 0);
