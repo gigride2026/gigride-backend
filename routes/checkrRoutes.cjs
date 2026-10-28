@@ -20,18 +20,6 @@ router.use(authMiddleware);
 router.get("/status", async (req, res) => {
   try {
 
-    const invitationStatus = screening.checkr_invitation_status;
-    const invitationExpiresAt = screening.checkr_invitation_expires_at;
-
-    const expirationTime = invitationExpiresAt
-      ? Date.parse(invitationExpiresAt)
-      : null;
-
-    const invitationIsValid =
-      invitationStatus === "pending" &&
-      (!invitationExpiresAt ||
-        (Number.isFinite(expirationTime) &&
-          expirationTime > Date.now()));
     return res.json({
       configured: Boolean(process.env.CHECKR_API_KEY),
       message: "Checkr route is working",
