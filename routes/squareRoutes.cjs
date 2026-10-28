@@ -663,6 +663,23 @@ router.post(
         driverId
       );
 
+      // Require recorded acknowledgment before creating or reusing checkout.
+      const { data: acknowledgment, error: acknowledgmentError } =
+        await supabaseAdmin
+          .from("driver_background_checks")
+          .select("screening_acknowledged_at")
+          .eq("driver_id", driverId)
+          .maybeSingle();
+
+      if (acknowledgmentError) throw acknowledgmentError;
+
+      if (!acknowledgment?.screening_acknowledged_at) {
+        return res.status(403).json({
+          error: "Screening acknowledgment is required before payment.",
+          code: "SCREENING_ACKNOWLEDGMENT_REQUIRED",
+        });
+      }
+
       if (
         existing?.fee_payment_status === "paid" ||
         existing?.fee_payment_status === "refunded"
