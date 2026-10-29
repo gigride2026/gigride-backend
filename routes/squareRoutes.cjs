@@ -798,7 +798,7 @@ for (const tender of orderTenders) {
 }
 // Reuse only an open checkout with no recorded tenders.
 if (
-  squareOrder.state === "OPEN" &&
+  ["OPEN", "DRAFT"].includes(squareOrder.state) &&
   orderTenders.length === 0
 ) {
   return res.json({
