@@ -577,7 +577,7 @@ if (!isRentalScreeningEligible(screening)) {
           "Square-Version": SQUARE_VERSION,
         },
         body: JSON.stringify({
-          idempotency_key: crypto.createHash("sha256").update(`${booking.id}:${payment_type}`).digest("hex"),
+         idempotency_key: crypto.randomUUID(),
           order: {
             location_id: squareLocationId,
             line_items: lineItems,
