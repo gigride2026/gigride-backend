@@ -557,7 +557,10 @@ if (!isRentalScreeningEligible(screening)) {
         process.env.APP_DEEP_LINK || "gigride://square-success",
     };
 
-    if (applicationFeeCents > 0) {
+   if (
+  process.env.SQUARE_ENVIRONMENT !== "sandbox" &&
+  applicationFeeCents > 0
+) {
       checkoutOptions.app_fee_money = {
         amount: applicationFeeCents,
         currency: "USD",
