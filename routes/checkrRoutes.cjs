@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
 const authMiddleware = require("../middlewares/auth.cjs");
+const { requireOwner } = require("../middlewares/staffAuth.cjs");
 const {
   getCheckrAccount,
   createCheckrCandidate,
@@ -34,7 +35,7 @@ router.get("/status", async (req, res) => {
 
 
 // Authenticated Checkr API connection test (read-only)
-router.get("/test-connection", async (req, res) => {
+router.get("/test-connection", requireOwner, async (req, res) => {
   try {
     const account = await getCheckrAccount();
 
@@ -64,7 +65,7 @@ router.post("/start-screening", authMiddleware, (req, res) => {
 
 // Record the authenticated driver's explicit screening acknowledgment.
 // This is not formal Checkr background-check authorization.
-router.post("/acknowledge-screening", async (req, res) => {
+router.post("/acknowledge-screening", authMiddleware, async (req, res) => {
   try {
     const driverId = req.user?.id;
 
@@ -196,7 +197,7 @@ router.post("/acknowledge-screening", async (req, res) => {
 });
 
 // Read-only screening status for the authenticated driver.
-router.get("/my-screening", async (req, res) => {
+router.get("/my-screening", authMiddleware, async (req, res) => {
   try {
     const driverId = req.user?.id;
 

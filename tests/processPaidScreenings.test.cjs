@@ -46,12 +46,11 @@ async function withMockedWorker(options, callback) {
           return this;
         },
         not(column, operator, value) {
-          assert.equal(column, "authorization_confirmed_at");
-          assert.equal(operator, "is");
-          assert.equal(value, null);
-          calls.authorizationFilters++;
-          return this;
-        },
+  assert.equal(column, "screening_acknowledged_at");
+  assert.equal(operator, "is");
+  assert.equal(value, null);
+  return this;
+},
         is() {
           return this;
         },
