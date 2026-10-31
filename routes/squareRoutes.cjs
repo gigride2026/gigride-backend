@@ -1270,18 +1270,44 @@ if (paymentType === "background_check") {
           ignored: "Deposit payment did not come from platform merchant",
         });
       }
-    } else {
-      if (!hostProfile?.id) {
-        console.error("SQUARE WEBHOOK RENTAL HOST MISSING:", {
-          bookingId,
-          eventMerchantId,
-        });
+   } else {
+  // Sandbox only: platform and test host may share a merchant.
+  if (
+    process.env.SQUARE_ENVIRONMENT === "sandbox" &&
+    isPlatformMerchant &&
+    paymentType === "rental" &&
+    !hostProfile?.id
+  ) {
+    const { data: sandboxHost, error: sandboxHostError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("id", booking.host_id)
+        .eq("square_merchant_id", eventMerchantId)
+        .eq("square_connection_status", "connected")
+        .maybeSingle();
 
-        return res.json({
-          ok: true,
-          ignored: "Rental payment merchant is not a connected host",
-        });
-      }
+    if (sandboxHostError) {
+      console.error("SQUARE SANDBOX HOST LOOKUP ERROR:", sandboxHostError.message);
+      return res.status(500).json({
+        error: "Sandbox host lookup failed",
+      });
+    }
+
+    hostProfile = sandboxHost;
+  }
+
+  if (!hostProfile?.id) {
+    console.error("SQUARE WEBHOOK RENTAL HOST MISSING:", {
+      bookingId,
+      eventMerchantId,
+    });
+
+    return res.json({
+      ok: true,
+      ignored: "Rental payment merchant is not a connected host",
+    });
+  }
 
       if (String(booking.host_id) !== String(hostProfile.id)) {
         console.error("SQUARE WEBHOOK HOST MISMATCH:", {
