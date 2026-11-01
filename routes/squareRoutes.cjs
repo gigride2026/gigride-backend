@@ -378,6 +378,12 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
       return res.status(409).json({ error: "Security deposit is already paid." });
     }
 
+    if (payment_type === "rental" && booking.deposit_paid !== true) {
+  return res.status(409).json({
+    error: "Security deposit must be paid before rental payment.",
+  });
+}
+
     if (
       payment_type === "rental" &&
       String(booking.payment_status || "").toLowerCase() === "paid"
