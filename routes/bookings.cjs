@@ -269,15 +269,17 @@ router.post("/:id/confirm-pickup", async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabaseAdmin
   .from("bookings")
-  .select(`
-    id,
-    status,
-    host_id,
-    driver_id,
-    host_pickup_photos,
-    driver_pickup_photos,
-    start_odometer
-  `)
+ .select(`
+  id,
+  status,
+  host_id,
+  driver_id,
+  deposit_paid,
+  payment_status,
+  host_pickup_photos,
+  driver_pickup_photos,
+  start_odometer
+`)
   .eq("id", bookingId)
   .maybeSingle();
 
@@ -290,10 +292,22 @@ router.post("/:id/confirm-pickup", async (req, res) => {
     }
 
     if (booking.status !== "deposit_paid" && booking.status !== "pending") {
-      return res.status(400).json({
-        error: "Booking must be paid before pickup confirmation",
-      });
-    }
+  return res.status(400).json({
+    error: "Booking is not ready for pickup confirmation",
+  });
+}
+
+if (booking.deposit_paid !== true) {
+  return res.status(409).json({
+    error: "Security deposit must be paid before pickup confirmation.",
+  });
+}
+
+if (booking.payment_status !== "paid") {
+  return res.status(409).json({
+    error: "Rental payment must be completed before pickup confirmation.",
+  });
+}
 
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from("bookings")
