@@ -15,11 +15,13 @@ function parseBookingDateTime(dateValue, timeValue, timezone) {
   const input = `${String(dateValue).trim()} ${normalizedTime}`;
 
   const formats = [
-    "yyyy-MM-dd h:mm a",
-    "yyyy-MM-dd hh:mm a",
-    "yyyy-MM-dd H:mm",
-    "yyyy-MM-dd HH:mm",
-  ];
+  "yyyy-MM-dd h:mm a",
+  "yyyy-MM-dd hh:mm a",
+  "yyyy-MM-dd H:mm",
+  "yyyy-MM-dd HH:mm",
+  "yyyy-MM-dd H:mm:ss",
+  "yyyy-MM-dd HH:mm:ss",
+];
 
   for (const format of formats) {
     const result = DateTime.fromFormat(input, format, {
