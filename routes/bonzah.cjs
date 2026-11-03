@@ -162,6 +162,17 @@ console.log("🛡️ Bonzah booking error:", error);
 
     const startDate = booking.start_at || booking.start_date;
     const endDate = booking.end_at || booking.end_date;
+    if (
+  !startDate ||
+  !endDate ||
+  !Number.isFinite(new Date(startDate).getTime()) ||
+  !Number.isFinite(new Date(endDate).getTime())
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "Valid rental start and end dates are required before requesting Bonzah coverage.",
+  });
+}
 
     const formatBonzahDate = (value) => {
   const d = new Date(value);
@@ -251,6 +262,17 @@ router.post("/booking/:bookingId/quote", async (req, res) => {
 
     const startDate = booking.start_at || booking.start_date;
     const endDate = booking.end_at || booking.end_date;
+    if (
+  !startDate ||
+  !endDate ||
+  !Number.isFinite(new Date(startDate).getTime()) ||
+  !Number.isFinite(new Date(endDate).getTime())
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "Valid rental start and end dates are required before requesting Bonzah coverage.",
+  });
+}
 
     const formatBonzahDateTime = (value) => {
       const d = new Date(value);
