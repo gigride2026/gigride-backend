@@ -20,6 +20,9 @@ test("completed Checkr invitation URL is hidden from the driver", async () => {
             next();
           };
         }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") {
           return {

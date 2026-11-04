@@ -30,7 +30,11 @@ test("screening acknowledgment requires explicit confirmation", async () => {
             next();
           };
         }
-
+if (request === "../middlewares/staffAuth.cjs") {
+  return {
+    requireOwner: (req, res, next) => next(),
+  };
+}
         if (request === "../services/checkrClient.cjs") {
           return {};
         }
@@ -182,6 +186,9 @@ test("authenticated driver can record screening acknowledgment", async () => {
             next();
           };
         }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -331,6 +338,9 @@ test("existing screening acknowledgment is not overwritten", async () => {
           };
         }
 
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -416,6 +426,9 @@ test("screening acknowledgment rejects unauthenticated requests", async () => {
           };
         }
 
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -528,6 +541,9 @@ test("screening acknowledgment fails safely on database lookup errors", async ()
           };
         }
 
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -586,6 +602,9 @@ test("screening status returns acknowledgment false when no record exists", asyn
             req.user = { id: "test-driver-id" };
             next();
           };
+        }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
         }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") {
@@ -653,6 +672,9 @@ test("screening status returns acknowledgment true for an acknowledged driver", 
             req.user = { id: "acknowledged-driver-id" };
             next();
           };
+        }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
         }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") {
@@ -795,6 +817,9 @@ test("screening acknowledgment returns 409 when database update is not confirmed
             next();
           };
         }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -927,6 +952,9 @@ test("first-time driver acknowledgment creates an unpaid screening record withou
             next();
           };
         }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -1023,6 +1051,9 @@ test("screening acknowledgment rejects bookings not approved for the authenticat
             next();
           };
         }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
       }
@@ -1093,6 +1124,9 @@ test("screening acknowledgment rejects missing and invalid booking IDs", async (
             req.user = { id: "test-driver-id" };
             next();
           };
+        }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
         }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
@@ -1256,6 +1290,9 @@ test("paid driver can acknowledge without resetting payment or screening status"
             req.user = { id: record.driver_id };
             next();
           };
+        }
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
         }
         if (request === "../services/checkrClient.cjs") return {};
         if (request === "../services/driverBackgroundChecks.cjs") return {};
