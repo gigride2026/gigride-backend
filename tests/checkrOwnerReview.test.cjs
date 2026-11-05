@@ -344,6 +344,7 @@ test("owner retrieves only allowed Checkr report fields", async () => {
               assert.equal(id, reportId);
               reportRequested = true;
               return {
+                object: "test_report",
                 id: reportId,
                 status: "complete",
                 result: "consider",
