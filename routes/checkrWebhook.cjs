@@ -185,7 +185,8 @@ if (lookupError) {
 }
 
 if (!screening) {
-  throw new Error("No GigRide screening matches Checkr candidate");
+  console.log("Ignoring Checkr report for unknown GigRide candidate:", { candidateId, reportId });
+  return res.status(200).json({ ok: true, processed: false });
 }
 
 if (
