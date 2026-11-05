@@ -250,5 +250,99 @@ checkr_invitation_url: invitationIsValid
     });
   }
 });
+// Owner-only: retrieve Checkr screenings awaiting review.
+router.get("/admin/review-queue", requireOwner, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("driver_background_checks")
+      .select(
+        "id, driver_id, first_booking_id, status, " +
+        "fee_payment_status, checkr_report_id, " +
+        "checkr_report_status, checkr_report_result, " +
+        "report_conflict_hold, review_decision, " +
+        "screening_completed_at, created_at"
+      )
+      .eq("status", "review_required")
+      .is("review_decision", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
+    if (error) {
+      console.error("CHECKR REVIEW QUEUE ERROR:", error.message);
+      return res.status(500).json({
+        error: "Unable to retrieve screening review queue.",
+      });
+    }
+
+    const screenings = (data || []).filter(
+      (screening) =>
+        screening.fee_payment_status === "paid" &&
+        screening.checkr_report_status === "complete" &&
+        screening.checkr_report_result === "consider" &&
+        screening.report_conflict_hold === false &&
+        Boolean(screening.checkr_report_id)
+    );
+
+    return res.json({ screenings });
+  } catch (error) {
+    console.error("CHECKR REVIEW QUEUE ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to retrieve screening review queue.",
+    });
+  }
+});
+
+// Owner-only: submit a screening review decision.
+router.post("/admin/review-screening", requireOwner, async (req, res) => {
+  try {
+    const { screening_id, decision, notes } = req.body || {};
+
+    if (
+      typeof screening_id !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(screening_id) ||
+      !["approved", "adverse_action_pending"].includes(decision) ||
+      typeof notes !== "string" ||
+      !notes.trim()
+    ) {
+      return res.status(400).json({
+        error: "Valid screening ID, decision, and review notes are required.",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "review_driver_screening",
+      {
+        p_screening_id: screening_id,
+        p_reviewer_id: req.user.id,
+        p_decision: decision,
+        p_notes: notes.trim(),
+      }
+    );
+
+    if (error) {
+      console.error("CHECKR OWNER REVIEW ERROR:", error.message);
+
+      if (
+        /not eligible|already has a review decision|not found/i.test(
+          error.message
+        )
+      ) {
+        return res.status(409).json({
+          error: "Screening is unavailable for review or already reviewed.",
+        });
+      }
+
+      return res.status(500).json({
+        error: "Unable to submit screening review.",
+      });
+    }
+
+    return res.json({ success: true, review: data });
+  } catch (error) {
+    console.error("CHECKR OWNER REVIEW ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to submit screening review.",
+    });
+  }
+});
 module.exports = router;
