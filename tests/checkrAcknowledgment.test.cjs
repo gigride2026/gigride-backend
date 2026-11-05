@@ -723,7 +723,7 @@ const response = await fetch(
       fee_pending: false,
 
 screening_status: "initiating",
-checkr_invitation_url: "https://apply.checkr.com/invite/test-driver",
+checkr_invitation_url: null,
 checkr_invitation_status: "pending",
 checkr_invitation_expires_at: "2026-11-04T12:00:00Z",
 rental_eligible: false,
