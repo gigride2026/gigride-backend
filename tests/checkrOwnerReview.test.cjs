@@ -88,6 +88,12 @@ const decisionResponse = await fetch(
 );
 
 assert.equal(decisionResponse.status, 403);
+
+const reportResponse = await fetch(
+  `http://127.0.0.1:${server.address().port}/api/checkr/admin/screening-report/11111111-1111-4111-8111-111111111111`
+);
+
+assert.equal(reportResponse.status, 403);
 assert.equal(databaseAccessed, false);
   } finally {
     Module._load = originalLoad;
@@ -272,6 +278,116 @@ test("owner approval uses authenticated owner ID", async () => {
     const body = await response.json();
     assert.equal(body.success, true);
     assert.equal(rpcCalled, true);
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[routePath];
+
+    if (server) {
+      await new Promise(resolve => server.close(resolve));
+    }
+  }
+});
+test("owner retrieves only allowed Checkr report fields", async () => {
+  const originalLoad = Module._load;
+  const routePath = require.resolve("../routes/checkrRoutes.cjs");
+  const screeningId = "11111111-1111-4111-8111-111111111111";
+  const reportId = "mock-report-123";
+  let server;
+  let reportRequested = false;
+
+  try {
+    Module._load = function (request, parent, isMain) {
+      if (parent?.filename === routePath) {
+        if (request === "../utils/supabaseAdmin.cjs") {
+          return {
+            supabaseAdmin: {
+              from(table) {
+                assert.equal(table, "driver_background_checks");
+                return {
+                  select() { return this; },
+                  eq(column, value) {
+                    assert.equal(column, "id");
+                    assert.equal(value, screeningId);
+                    return this;
+                  },
+                  async single() {
+                    return {
+                      data: {
+                        id: screeningId,
+                        checkr_report_id: reportId,
+                        status: "review_required",
+                        review_decision: null,
+                      },
+                      error: null,
+                    };
+                  },
+                };
+              },
+            },
+          };
+        }
+
+        if (request === "../middlewares/auth.cjs") {
+          return (req, res, next) => {
+            req.user = { id: "mock-owner-id" };
+            next();
+          };
+        }
+
+        if (request === "../middlewares/staffAuth.cjs") {
+          return { requireOwner: (req, res, next) => next() };
+        }
+
+        if (request === "../services/checkrClient.cjs") {
+          return {
+            async getCheckrReport(id) {
+              assert.equal(id, reportId);
+              reportRequested = true;
+              return {
+                id: reportId,
+                status: "complete",
+                result: "consider",
+                completed_at: "2026-11-01T12:00:00Z",
+                package: "mock-package",
+                ssn: "000-00-0000",
+                dob: "1990-01-01",
+              };
+            },
+          };
+        }
+
+        if (request === "../services/driverBackgroundChecks.cjs") {
+          return {};
+        }
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    delete require.cache[routePath];
+    const router = require(routePath);
+    Module._load = originalLoad;
+
+    const app = express();
+    app.use(express.json());
+    app.use("/api/checkr", router);
+
+    server = app.listen(0, "127.0.0.1");
+    await new Promise(resolve => server.once("listening", resolve));
+
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/checkr/admin/screening-report/${screeningId}`
+    );
+
+    assert.equal(response.status, 200);
+
+    const body = await response.json();
+    assert.equal(reportRequested, true);
+    assert.equal(body.report.id, reportId);
+    assert.equal(body.report.result, "consider");
+    assert.equal(body.report.status, "complete");
+    assert.equal(body.report.ssn, undefined);
+    assert.equal(body.report.dob, undefined);
   } finally {
     Module._load = originalLoad;
     delete require.cache[routePath];

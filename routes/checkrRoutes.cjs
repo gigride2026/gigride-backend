@@ -6,6 +6,7 @@ const {
   getCheckrAccount,
   createCheckrCandidate,
   createCheckrInvitation,
+  getCheckrReport,
 } = require("../services/checkrClient.cjs");
 
 const {
@@ -342,6 +343,62 @@ router.post("/admin/review-screening", requireOwner, async (req, res) => {
     console.error("CHECKR OWNER REVIEW ERROR:", error.message);
     return res.status(500).json({
       error: "Unable to submit screening review.",
+    });
+  }
+});
+// Owner-only: retrieve limited Checkr report details for review.
+router.get("/admin/screening-report/:screeningId", requireOwner, async (req, res) => {
+  try {
+    const { screeningId } = req.params;
+
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(screeningId)
+    ) {
+      return res.status(400).json({ error: "Invalid screening ID." });
+    }
+
+    const { data: screening, error } = await supabaseAdmin
+      .from("driver_background_checks")
+      .select("id, checkr_report_id, status, review_decision")
+      .eq("id", screeningId)
+      .single();
+
+    if (error || !screening) {
+      return res.status(404).json({ error: "Screening not found." });
+    }
+
+    if (
+      screening.status !== "review_required" ||
+      screening.review_decision !== null ||
+      !screening.checkr_report_id
+    ) {
+      return res.status(409).json({
+        error: "Screening is not available for review.",
+      });
+    }
+
+    const report = await getCheckrReport(screening.checkr_report_id);
+
+    if (report.id !== screening.checkr_report_id) {
+      return res.status(502).json({
+        error: "Checkr report ID mismatch.",
+      });
+    }
+
+    return res.json({
+      report: {
+        id: report.id,
+        status: report.status,
+        result: report.result,
+        completed_at: report.completed_at ?? null,
+        package: report.package ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("CHECKR REPORT RETRIEVAL ERROR:", error.message);
+
+    return res.status(502).json({
+      error: "Unable to retrieve Checkr report.",
     });
   }
 });
