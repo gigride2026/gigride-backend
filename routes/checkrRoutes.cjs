@@ -260,7 +260,8 @@ router.get("/admin/review-queue", requireOwner, async (req, res) => {
         "id, driver_id, first_booking_id, status, " +
         "fee_payment_status, checkr_report_id, " +
         "checkr_report_status, checkr_report_result, " +
-        "report_conflict_hold, review_decision, " +
+"checkr_report_assessment, checkr_includes_canceled, " +
+"report_conflict_hold, review_decision, " +
         "screening_completed_at, created_at"
       )
       .eq("status", "review_required")
@@ -279,7 +280,14 @@ router.get("/admin/review-queue", requireOwner, async (req, res) => {
       (screening) =>
         screening.fee_payment_status === "paid" &&
         screening.checkr_report_status === "complete" &&
-        screening.checkr_report_result === "consider" &&
+        screening.checkr_includes_canceled === false &&
+(
+  screening.checkr_report_assessment === "review" ||
+  (
+    screening.checkr_report_assessment == null &&
+    screening.checkr_report_result === "consider"
+  )
+) &&
         screening.report_conflict_hold === false &&
         Boolean(screening.checkr_report_id)
     );

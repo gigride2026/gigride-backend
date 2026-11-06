@@ -15,7 +15,8 @@ function getCheckrReportId(payload) {
 
 if (
   eventType !== "report.completed" &&
-  eventType !== "report.updated" &&
+eventType !== "report.canceled" &&
+eventType !== "report.updated" &&
   eventType !== "report.engaged" &&
   eventType !== "report.dispute_completed"
 ) {
@@ -212,6 +213,8 @@ const { data: screeningStatus, error: updateError } =
     p_report_id: reportId,
     p_report_status: report.status,
     p_report_result: report.result ?? null,
+    p_report_assessment: report.assessment ?? null,
+    p_includes_canceled: report.includes_canceled ?? null,
     p_completed_at: report.completed_at ?? null,
     p_revised_at: report.revised_at ?? null,
   });

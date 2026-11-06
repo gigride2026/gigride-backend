@@ -116,9 +116,17 @@ test("owner receives only eligible Checkr screenings", async () => {
     fee_payment_status: "paid",
     checkr_report_status: "complete",
     checkr_report_result: "consider",
+    checkr_includes_canceled: false,
     report_conflict_hold: false,
     checkr_report_id: "report-123",
   };
+  const assessReview = {
+  ...eligible,
+  id: "33333333-3333-4333-8333-333333333333",
+  checkr_report_result: "clear",
+  checkr_report_assessment: "review",
+  checkr_report_id: "report-assess-review",
+};
 
   const ineligible = {
     ...eligible,
@@ -133,7 +141,7 @@ test("owner receives only eligible Checkr screenings", async () => {
     order() { return this; },
     limit() {
       return Promise.resolve({
-        data: [eligible, ineligible],
+        data: [eligible, assessReview, ineligible],
         error: null,
       });
     },
@@ -185,8 +193,9 @@ test("owner receives only eligible Checkr screenings", async () => {
     assert.equal(response.status, 200);
 
     const body = await response.json();
-    assert.equal(body.screenings.length, 1);
-    assert.equal(body.screenings[0].id, eligible.id);
+    assert.equal(body.screenings.length, 2);
+assert.equal(body.screenings[0].id, eligible.id);
+assert.equal(body.screenings[1].id, assessReview.id);
   } finally {
     Module._load = originalLoad;
     delete require.cache[routePath];

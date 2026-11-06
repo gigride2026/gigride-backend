@@ -71,6 +71,7 @@ test("An approved consider report with a Checkr report ID can be rental eligible
     checkr_report_status: "complete",
     checkr_report_result: "consider",
     checkr_report_id: "report-test-id",
+    checkr_includes_canceled: false,
     report_conflict_hold: false,
     review_decision: "approved",
     reviewed_by: "owner-test-id",
@@ -78,4 +79,64 @@ test("An approved consider report with a Checkr report ID can be rental eligible
   };
 
   assert.equal(isRentalScreeningEligible(screening), true);
+});
+test("A report containing canceled screenings cannot unlock rental payment", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "clear",
+    checkr_report_status: "complete",
+    checkr_report_result: "clear",
+    checkr_report_assessment: "eligible",
+    checkr_report_id: "report-canceled-test",
+    checkr_includes_canceled: true,
+    report_conflict_hold: false,
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), false);
+});
+test("A Checkr Assess review result requires owner approval", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "review_required",
+    checkr_report_status: "complete",
+    checkr_report_result: "clear",
+    checkr_report_assessment: "review",
+    checkr_report_id: "report-assess-review-test",
+    checkr_includes_canceled: false,
+    report_conflict_hold: false,
+    review_decision: null,
+    reviewed_by: null,
+    reviewed_at: null,
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), false);
+});
+
+test("A Checkr Assess eligible report can unlock rental payment", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "clear",
+    checkr_report_status: "complete",
+    checkr_report_result: "consider",
+    checkr_report_assessment: "eligible",
+    checkr_report_id: "report-assess-eligible-test",
+    checkr_includes_canceled: false,
+    report_conflict_hold: false,
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), true);
+});
+test("Missing Checkr cancellation information blocks rental payment", () => {
+  const screening = {
+    fee_payment_status: "paid",
+    status: "clear",
+    checkr_report_status: "complete",
+    checkr_report_result: "clear",
+    checkr_report_assessment: "eligible",
+    checkr_report_id: "report-missing-cancellation-test",
+    checkr_includes_canceled: null,
+    report_conflict_hold: false,
+  };
+
+  assert.equal(isRentalScreeningEligible(screening), false);
 });

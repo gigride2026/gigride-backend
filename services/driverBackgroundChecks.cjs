@@ -21,15 +21,29 @@ function isRentalScreeningEligible(screening) {
     String(screening.checkr_report_id || "").trim()
   );
   const reportComplete = screening.checkr_report_status === "complete";
+  const noCanceledScreenings =
+  screening.checkr_includes_canceled === false;
   const noConflict = screening.report_conflict_hold === false;
 
   const automaticallyCleared =
-    screening.status === "clear" &&
-    screening.checkr_report_result === "clear";
+  screening.status === "clear" &&
+  (
+    screening.checkr_report_assessment === "eligible" ||
+    (
+      screening.checkr_report_assessment == null &&
+      screening.checkr_report_result === "clear"
+    )
+  );
 
   const ownerApproved =
     screening.status === "review_required" &&
-    screening.checkr_report_result === "consider" &&
+    (
+  screening.checkr_report_assessment === "review" ||
+  (
+    screening.checkr_report_assessment == null &&
+    screening.checkr_report_result === "consider"
+  )
+) &&
     screening.review_decision === "approved" &&
     Boolean(screening.reviewed_by) &&
     Boolean(screening.reviewed_at);
@@ -38,6 +52,7 @@ function isRentalScreeningEligible(screening) {
     feePaid &&
     hasCheckrReport &&
     reportComplete &&
+    noCanceledScreenings &&
     noConflict &&
     (automaticallyCleared || ownerApproved)
   );
