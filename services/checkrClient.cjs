@@ -2,17 +2,20 @@
 const axios = require("axios");
 const CHECKR_PACKAGE_SLUG = process.env.CHECKR_PACKAGE_SLUG;
 
-const CHECKR_BASE_URL = "https://" + "api.checkr-staging.com/v1";
+const CHECKR_ENVIRONMENT = process.env.CHECKR_ENVIRONMENT || "staging";
+
+if (!["staging", "production"].includes(CHECKR_ENVIRONMENT)) {
+  throw new Error("Invalid CHECKR_ENVIRONMENT");
+}
+
+const CHECKR_BASE_URL =
+  CHECKR_ENVIRONMENT === "production"
+    ? "https:" + "//api.checkr.com/v1"
+    : "https:" + "//api.checkr-staging.com/v1";
 function getCheckrClient() {
   const apiKey = process.env.CHECKR_API_KEY;
 
-const checkrEnvironment = process.env.CHECKR_ENVIRONMENT || "staging";
 
-if (checkrEnvironment !== "staging") {
-  throw new Error(
-    "Checkr production access is disabled. Only staging is permitted."
-  );
-}
 
   if (!apiKey) {
     throw new Error("CHECKR_API_KEY is not configured");
