@@ -403,7 +403,7 @@ router.get(
         });
       }
 
-      let reportUrl;
+            let reportUrl;
 
       if (report.object === "test_report") {
         reportUrl = `https://dashboard.checkr.com/reports/${encodeURIComponent(report.id)}?test=true`;
