@@ -435,9 +435,9 @@ router.get(
             let reportUrl;
 
       if (report.object === "test_report") {
-        reportUrl = `https://dashboard.checkr.com/reports/${encodeURIComponent(report.id)}?test=true`;
+        reportUrl = `https://dashboard.checkrhq-staging.net/reports/${encodeURIComponent(report.id)}?test=true`;
       } else if (report.object === "report") {
-        reportUrl = `https://dashboard.checkr.com/reports/${encodeURIComponent(report.id)}`;
+        reportUrl = `https://dashboard.checkrhq-staging.net/reports/${encodeURIComponent(report.id)}`;
       } else {
         return res.status(502).json({
           error: "Unexpected Checkr report type.",
