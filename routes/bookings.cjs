@@ -228,7 +228,38 @@ router.patch("/:id/host-approve", async (req, res) => {
       });
     }
 
-    return res.json({ ok: true, booking: updated });
+    // Notify GigRide owner when a host approves a booking.
+try {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (ownerUserId && updated) {
+    const result = await notifyUser({
+      supabaseAdmin,
+      userId: ownerUserId,
+      title: "✅ GigRide Booking Approved",
+      body: `A host approved booking ${bookingId}. The driver can proceed with the next booking steps.`,
+      data: {
+        type: "owner_booking_approved",
+        bookingId,
+        hostId: updated.host_id,
+        driverId: updated.driver_id,
+      },
+    });
+
+    if (!result?.ok) {
+      console.warn("Owner approval push not accepted:", result?.error);
+    }
+  }
+} catch (notificationError) {
+  console.error(
+    "Owner approval notification failed:",
+    notificationError?.message || notificationError
+  );
+}
+
+return res.json({ ok: true, booking: updated });
   } catch (e) {
     console.error("APPROVE ERROR:", e);
     return res.status(500).json({ error: e.message || "Server error" });
