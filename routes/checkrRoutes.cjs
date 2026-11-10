@@ -252,6 +252,35 @@ checkr_invitation_url: invitationIsValid
   }
 });
 // Owner-only: retrieve Checkr screenings awaiting review.
+// Owner-only: read-only history of existing Checkr screenings.
+router.get("/admin/screening-history", requireOwner, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("driver_background_checks")
+      .select(
+        "id, driver_id, status, checkr_report_id, " +
+        "checkr_report_status, checkr_report_result, " +
+        "review_decision, screening_completed_at, created_at"
+      )
+      .not("checkr_report_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error("CHECKR SCREENING HISTORY ERROR:", error.message);
+      return res.status(500).json({
+        error: "Unable to retrieve screening history.",
+      });
+    }
+
+    return res.json({ screenings: data || [] });
+  } catch (error) {
+    console.error("CHECKR SCREENING HISTORY ERROR:", error.message);
+    return res.status(500).json({
+      error: "Unable to retrieve screening history.",
+    });
+  }
+});
 router.get("/admin/review-queue", requireOwner, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
