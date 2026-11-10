@@ -6,6 +6,7 @@ const authMiddleware = require("../middlewares/auth.cjs");
 const { requireStaff, requireOwner } = require("../middlewares/staffAuth.cjs");
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const { notifyUser } = require("../utils/pushNotifications.cjs");
 const { sendSupportInviteCodeEmail } = require("../utils/email.cjs");
 
 // Every Support Center endpoint must pass both authentication
@@ -321,6 +322,65 @@ router.post("/customer/cases/:caseId/messages", authMiddleware, async (req, res)
   }
 });
 router.use(authMiddleware, requireStaff);
+// Owner-only Checkr screening review.
+router.post("/screenings/:id/review", requireOwner, async (req, res) => {
+  try {
+    const screeningId = String(req.params.id || "").trim();
+    const decision = String(req.body?.decision || "").trim();
+    const notes = String(req.body?.notes || "").trim();
+
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(screeningId)
+    ) {
+      return res.status(400).json({ error: "Invalid screening ID" });
+    }
+
+    if (!["approved", "adverse_action_pending"].includes(decision)) {
+      return res.status(400).json({ error: "Invalid review decision" });
+    }
+
+    if (!notes || notes.length > 2000) {
+      return res.status(400).json({
+        error: "Review notes are required (maximum 2000 characters)",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "review_driver_screening",
+      {
+        p_screening_id: screeningId,
+        p_reviewer_id: req.user.id,
+        p_decision: decision,
+        p_notes: notes,
+      }
+    );
+
+    if (error) {
+      console.error("CHECKR OWNER REVIEW ERROR:", error.message);
+
+      if (
+        /authorization|required|not eligible|already has|not found|invalid/i.test(
+          error.message
+        )
+      ) {
+        return res.status(409).json({
+          error: "Screening review could not be completed",
+        });
+      }
+
+      return res.status(500).json({
+        error: "Unable to save screening review",
+      });
+    }
+
+    return res.json({ ok: true, review: data });
+  } catch (error) {
+    console.error("CHECKR OWNER REVIEW ERROR:", error);
+    return res.status(500).json({
+      error: "Unable to save screening review",
+    });
+  }
+});
 
 // Owner-only staff management.
 router.post("/staff/invite", requireOwner, async (req, res) => {
@@ -332,7 +392,6 @@ router.post("/staff/invite", requireOwner, async (req, res) => {
     }
 
     const code = String(crypto.randomInt(100000, 1000000));
-console.log("SUPPORT INVITE GENERATED CODE:", { email, code });
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
@@ -1009,7 +1068,32 @@ router.post("/cases", async (req, res) => {
         });
       }
     }
+// Reuse an existing host follow-up case for this booking.
+if (bookingId && category === "host" && subject === "Booking request follow-up") {
+  const { data: existingCase, error: lookupError } = await supabaseAdmin
+    .from("support_cases")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("booking_id", bookingId)
+    .eq("category", "host")
+    .eq("subject", "Booking request follow-up")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
+  if (lookupError) {
+    console.error("SUPPORT CASE LOOKUP ERROR:", lookupError.message);
+    return res.status(500).json({ error: "Unable to check existing support cases" });
+  }
+
+  if (existingCase) {
+    return res.status(200).json({
+      ok: true,
+      case: existingCase,
+      reused: true,
+    });
+  }
+}
     const { data: supportCase, error: insertError } = await supabaseAdmin
       .from("support_cases")
       .insert({
@@ -1472,7 +1556,7 @@ router.post("/cases/:caseId/messages", async (req, res) => {
 
     const { data: supportCase, error: caseError } = await supabaseAdmin
       .from("support_cases")
-      .select("id")
+      .select("id, customer_id")
       .eq("id", caseId)
       .maybeSingle();
 
@@ -1498,7 +1582,58 @@ router.post("/cases/:caseId/messages", async (req, res) => {
       console.error("SUPPORT MESSAGE SEND ERROR:", messageError.message);
       return res.status(500).json({ error: "Unable to send message" });
     }
+// Notify the customer when GigRide support sends a message.
+try {
+  if (supportCase.customer_id !== req.user.id) {
+    const pushResult = await notifyUser({
+      supabaseAdmin,
+      userId: supportCase.customer_id,
+      title: "💬 New GigRide Support Message",
+      body: "GigRide Support sent you a message. Open Support Center to reply.",
+      data: {
+        type: "support_message",
+        caseId,
+      },
+    });
 
+    if (!pushResult?.ok) {
+      console.warn("Support message push not accepted:", pushResult?.error);
+    }
+  }
+} catch (notificationError) {
+  console.error("Support message notification failed:", notificationError);
+}
+// Notify GigRide owner when a host replies to a support case.
+try {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (ownerUserId && ownerUserId !== req.user.id) {
+    const pushResult = await notifyUser({
+      supabaseAdmin,
+      userId: ownerUserId,
+      title: "💬 New Support Reply",
+      body: "A customer replied to a GigRide support conversation.",
+      data: {
+        type: "owner_support_reply",
+        caseId,
+      },
+    });
+
+    if (!pushResult?.ok) {
+      console.warn(
+        "Owner support reply push not accepted:",
+        pushResult?.error
+      );
+    }
+  }
+} catch (notificationError) {
+  console.error(
+    "Owner support reply notification failed:",
+    notificationError
+  );
+}
     return res.status(201).json({ ok: true, message });
   } catch (error) {
     console.error("SUPPORT MESSAGE ERROR:", error);

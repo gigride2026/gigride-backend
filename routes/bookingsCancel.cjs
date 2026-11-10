@@ -192,6 +192,48 @@ if (refundCents > 0) {
       console.log("booking_events insert failed:", e.message);
     }
 
+    // Notify GigRide owner when a host declines a booking request.
+    if (
+      booking.status === "requested" &&
+      user.id === booking.host_id
+    ) {
+      try {
+        const ownerUserId = String(
+          process.env.GIGRIDE_OWNER_USER_ID || ""
+        ).trim();
+
+        if (ownerUserId) {
+          const { notifyUser } = require("../utils/pushNotifications.cjs");
+
+          const result = await notifyUser({
+            supabaseAdmin,
+            userId: ownerUserId,
+            title: "❌ GigRide Booking Declined",
+            body: `A host declined booking ${booking.id}. The driver will need another vehicle.`,
+            data: {
+              type: "owner_booking_declined",
+              bookingId: booking.id,
+              hostId: booking.host_id,
+              driverId: booking.driver_id,
+            },
+          });
+
+          if (!result?.ok) {
+            console.warn(
+              "Owner decline push not accepted:",
+              result?.error
+            );
+          }
+        }
+      } catch (notificationError) {
+        console.error(
+          "Owner decline notification failed:",
+          notificationError?.message || notificationError
+        );
+      }
+    }
+
+
     return res.json({
       ok: true,
       booking: updated,

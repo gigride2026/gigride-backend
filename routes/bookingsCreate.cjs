@@ -15,11 +15,13 @@ function parseBookingDateTime(dateValue, timeValue, timezone) {
   const input = `${String(dateValue).trim()} ${normalizedTime}`;
 
   const formats = [
-    "yyyy-MM-dd h:mm a",
-    "yyyy-MM-dd hh:mm a",
-    "yyyy-MM-dd H:mm",
-    "yyyy-MM-dd HH:mm",
-  ];
+  "yyyy-MM-dd h:mm a",
+  "yyyy-MM-dd hh:mm a",
+  "yyyy-MM-dd H:mm",
+  "yyyy-MM-dd HH:mm",
+  "yyyy-MM-dd H:mm:ss",
+  "yyyy-MM-dd HH:mm:ss",
+];
 
   for (const format of formats) {
     const result = DateTime.fromFormat(input, format, {
@@ -527,19 +529,42 @@ try {
   const driverName =
     String(driverProfile?.full_name || "").trim() || "A driver";
 
+
   // Host gets operational booking information only
+  let hostNotificationStatus = "No host assigned";
+
   if (data.host_id) {
-    await notifyUser({
-      supabaseAdmin,
-      userId: data.host_id,
-      title: "🚗 New Booking Request",
-      body: `${driverName} requested your ${vehicleName}. Open GigRide to review the request.`,
-      data: {
-        type: "new_booking_request",
+    hostNotificationStatus = "Failed";
+
+    try {
+      const hostPushResult = await notifyUser({
+        supabaseAdmin,
+        userId: data.host_id,
+        title: "🚗 New Booking Request",
+        body: `${driverName} requested your ${vehicleName}. Open GigRide to review the request.`,
+        data: {
+          type: "new_booking_request",
+          bookingId: data.id,
+        },
+      });
+
+      hostNotificationStatus = hostPushResult?.ok
+        ? "Accepted by Expo"
+        : "Failed";
+
+      console.log("Host booking push result:", {
         bookingId: data.id,
-      },
-    });
+        status: hostNotificationStatus,
+        error: hostPushResult?.error || null,
+      });
+    } catch (hostPushError) {
+      console.error("Host booking notification failed:", {
+        bookingId: data.id,
+        error: hostPushError?.message || String(hostPushError),
+      });
+    }
   }
+
 
   // Owner-only notification
   const ownerUserId = String(
@@ -574,7 +599,8 @@ try {
         `${driverName} → ${vehicleName} • ` +
         `${start_date}–${end_date} • ` +
         `${bookingValue} booking • ` +
-        `${platformRevenue} potential GigRide revenue`,
+        `${platformRevenue} potential GigRide revenue • ` +
+`Host push: ${hostNotificationStatus}`,
       data: {
         type: "owner_new_booking",
         bookingId: data.id,
