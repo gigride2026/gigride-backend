@@ -161,9 +161,22 @@ router.get("/admin/conversations/:conversationId/messages", async (req, res) => 
 
     if (error) throw error;
 
+    const { error: readError } = await supabaseAdmin
+      .from("admin_messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("read_at", null);
+
+    if (readError) throw readError;
+
     return res.json({
       conversation,
-      messages: messages || [],
+      messages: (messages || []).map((message) =>
+        message.sender_id !== userId && !message.read_at
+          ? { ...message, read_at: new Date().toISOString() }
+          : message
+      ),
     });
   } catch (error) {
     console.error("ADMIN MESSAGES ERROR:", error);
@@ -276,8 +289,28 @@ router.get("/admin/conversations", async (req, res) => {
 
     if (error) throw error;
 
+    const conversations = data || [];
+
+    const conversationsWithUnread = await Promise.all(
+      conversations.map(async (conversation) => {
+        const { count, error: countError } = await supabaseAdmin
+          .from("admin_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("conversation_id", conversation.id)
+          .neq("sender_id", userId)
+          .is("read_at", null);
+
+        if (countError) throw countError;
+
+        return {
+          ...conversation,
+          unread_count: count || 0,
+        };
+      })
+    );
+
     return res.json({
-      conversations: data || [],
+      conversations: conversationsWithUnread,
     });
   } catch (error) {
     console.error("PRIVATE CONVERSATION LIST ERROR:", error);
