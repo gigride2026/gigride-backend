@@ -291,6 +291,25 @@ router.get("/admin/conversations", async (req, res) => {
 
     const conversations = data || [];
 
+    const customerIds = isAdmin
+      ? [...new Set(conversations.map((c) => c.customer_id).filter(Boolean))]
+      : [];
+
+    const profilesById = new Map();
+
+    if (customerIds.length) {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", customerIds);
+
+      if (profilesError) throw profilesError;
+
+      for (const profile of profiles || []) {
+        profilesById.set(profile.id, profile);
+      }
+    }
+
     const conversationsWithUnread = await Promise.all(
       conversations.map(async (conversation) => {
         const { count, error: countError } = await supabaseAdmin
@@ -302,9 +321,19 @@ router.get("/admin/conversations", async (req, res) => {
 
         if (countError) throw countError;
 
+        const profile = isAdmin
+          ? profilesById.get(conversation.customer_id)
+          : null;
+
         return {
           ...conversation,
           unread_count: count || 0,
+          ...(isAdmin
+            ? {
+                customer_name: profile?.full_name || null,
+                customer_email: profile?.email || null,
+              }
+            : {}),
         };
       })
     );
