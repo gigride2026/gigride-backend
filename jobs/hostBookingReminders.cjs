@@ -273,6 +273,38 @@ async function sendTwelveHourEscalation(booking) {
   });
 }
 
+async function sendFourHourEscalation(booking) {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (!ownerUserId) {
+    console.error("GIGRIDE_OWNER_USER_ID is not configured.");
+    return false;
+  }
+
+  return sendPushDelivery({
+    booking,
+    eventType: EVENT_4H_OWNER_PUSH,
+    userId: ownerUserId,
+    title: "🚨 GigRide Booking Still Unanswered",
+    body: `Host has not responded to booking ${booking.id} after 4 hours.`,
+    data: {
+      type: "host_booking_escalation",
+      bookingId: booking.id,
+      hostId: booking.host_id,
+      reminderStage: "4h",
+    },
+    message: "4-hour unanswered booking owner escalation.",
+    metadata: {
+      reminder_stage: "4h",
+      channel: "push",
+      booking_status: booking.status,
+      host_id: booking.host_id,
+    },
+  });
+}
+
 async function sendTwoHourEscalation(booking) {
   const ownerUserId = String(
     process.env.GIGRIDE_OWNER_USER_ID || ""
@@ -349,6 +381,8 @@ const thirtyMinutesAgo =
     new Date(now - 60 * 60 * 1000).toISOString();
 const twoHoursAgo =
   new Date(now - 2 * 60 * 60 * 1000).toISOString();
+const fourHoursAgo =
+  new Date(now - 4 * 60 * 60 * 1000).toISOString();
   const twelveHoursAgo =
   new Date(now - 12 * 60 * 60 * 1000).toISOString();
 
@@ -393,6 +427,10 @@ if (booking.created_at <= thirtyMinutesAgo) {
     }
 if (booking.created_at <= twoHoursAgo) {
   await sendTwoHourEscalation(booking);
+}
+
+if (booking.created_at <= fourHoursAgo) {
+  await sendFourHourEscalation(booking);
 }
     if (booking.created_at <= twelveHoursAgo) {
   await sendTwelveHourEscalation(booking);
