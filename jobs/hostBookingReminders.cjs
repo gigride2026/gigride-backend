@@ -387,15 +387,13 @@ const fourHoursAgo =
   new Date(now - 12 * 60 * 60 * 1000).toISOString();
 
   const today = new Date().toISOString().slice(0, 10);
-
-  const { data: bookings, error } = await supabaseAdmin
-    .from("bookings")
-    .select("id,host_id,status,created_at,start_date,end_date")
-    .eq("status", "requested")
-    .gte("start_date", today)
-    .lte("created_at", fifteenMinutesAgo)
-    .order("created_at", { ascending: true });
-
+const { data: bookings, error } = await supabaseAdmin
+  .from("bookings")
+  .select("id,host_id,status,created_at,start_date,end_date,vehicle:vehicles!bookings_vehicle_id_fkey(is_test_vehicle)")
+  .eq("status", "requested")
+  .gte("start_date", today)
+  .lte("created_at", fifteenMinutesAgo)
+  .order("created_at", { ascending: true });
   if (error) {
     throw new Error(
       `Unable to load requested bookings: ${error.message}`
@@ -408,6 +406,7 @@ const fourHoursAgo =
 
 
   for (const booking of bookings || []) {
+if (booking.vehicle?.is_test_vehicle === true) continue;
     if (!booking.host_id) continue;
 
     if (await send15MinuteReminder(booking)) {
