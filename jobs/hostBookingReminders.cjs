@@ -9,6 +9,10 @@ const EVENT_1H_PUSH = "host_reminder_1h_push";
 const EVENT_1H_EMAIL = "host_reminder_1h_email";
 const EVENT_4H_OWNER_PUSH = "host_reminder_4h_owner_push";
 
+const EVENT_30M_OWNER_PUSH = "host_reminder_30m_owner_push";
+const EVENT_2H_OWNER_PUSH = "host_reminder_2h_owner_push";
+const EVENT_12H_OWNER_PUSH = "host_reminder_12h_owner_push";
+
 async function claimEvent({
   bookingId,
   eventType,
@@ -237,8 +241,42 @@ async function sendOneHourEmail(booking) {
   }
 }
 
+async function sendTwelveHourEscalation(booking) {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (!ownerUserId) {
+    console.error("GIGRIDE_OWNER_USER_ID is not configured.");
+    return false;
+  }
+
+  return sendPushDelivery({
+    booking,
+    eventType: EVENT_12H_OWNER_PUSH,
+    userId: ownerUserId,
+    title: "🚨 GigRide Booking Still Unanswered",
+    body: `Booking ${booking.id} has been awaiting host approval for 12 hours. Follow-up is needed.`,
+    data: {
+      type: "host_booking_escalation",
+      bookingId: booking.id,
+      hostId: booking.host_id,
+      reminderStage: "12h",
+    },
+    message: "12-hour unanswered booking owner escalation.",
+    metadata: {
+      reminder_stage: "12h",
+      channel: "push",
+      booking_status: booking.status,
+      host_id: booking.host_id,
+    },
+  });
+}
+
 async function sendFourHourEscalation(booking) {
-  const ownerUserId = process.env.GIGRIDE_OWNER_USER_ID;
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
 
   if (!ownerUserId) {
     console.error("GIGRIDE_OWNER_USER_ID is not configured.");
@@ -249,16 +287,15 @@ async function sendFourHourEscalation(booking) {
     booking,
     eventType: EVENT_4H_OWNER_PUSH,
     userId: ownerUserId,
-    title: "🚨 Host Hasn't Responded",
-    body:
-      "A GigRide booking request has been waiting more than 4 hours for the host to approve or decline.",
+    title: "🚨 GigRide Booking Still Unanswered",
+    body: `Host has not responded to booking ${booking.id} after 4 hours.`,
     data: {
       type: "host_booking_escalation",
       bookingId: booking.id,
       hostId: booking.host_id,
       reminderStage: "4h",
     },
-    message: "4-hour unanswered booking owner push claimed.",
+    message: "4-hour unanswered booking owner escalation.",
     metadata: {
       reminder_stage: "4h",
       channel: "push",
@@ -268,28 +305,95 @@ async function sendFourHourEscalation(booking) {
   });
 }
 
+async function sendTwoHourEscalation(booking) {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (!ownerUserId) {
+    console.error("GIGRIDE_OWNER_USER_ID is not configured.");
+    return false;
+  }
+
+  return sendPushDelivery({
+    booking,
+    eventType: EVENT_2H_OWNER_PUSH,
+    userId: ownerUserId,
+    title: "⚠️ GigRide Booking Still Unanswered",
+    body: `Host has not responded to booking ${booking.id} after 2 hours.`,
+    data: {
+      type: "host_booking_escalation",
+      bookingId: booking.id,
+      hostId: booking.host_id,
+      reminderStage: "2h",
+    },
+    message: "2-hour unanswered booking owner escalation.",
+    metadata: {
+      reminder_stage: "2h",
+      channel: "push",
+      booking_status: booking.status,
+      host_id: booking.host_id,
+    },
+  });
+}
+
+async function sendThirtyMinuteEscalation(booking) {
+  const ownerUserId = String(
+    process.env.GIGRIDE_OWNER_USER_ID || ""
+  ).trim();
+
+  if (!ownerUserId) {
+    console.error("GIGRIDE_OWNER_USER_ID is not configured.");
+    return false;
+  }
+
+  return sendPushDelivery({
+    booking,
+    eventType: EVENT_30M_OWNER_PUSH,
+    userId: ownerUserId,
+    title: "⏰ GigRide Booking Awaiting Approval",
+    body: `Host has not responded to booking ${booking.id} after 30 minutes.`,
+    data: {
+      type: "host_booking_escalation",
+      bookingId: booking.id,
+      hostId: booking.host_id,
+      reminderStage: "30m",
+    },
+    message: "30-minute unanswered booking owner escalation.",
+    metadata: {
+      reminder_stage: "30m",
+      channel: "push",
+      booking_status: booking.status,
+      host_id: booking.host_id,
+    },
+  });
+}
+
+
 async function runHostBookingReminders() {
   const now = Date.now();
 
   const fifteenMinutesAgo =
     new Date(now - 15 * 60 * 1000).toISOString();
-
+const thirtyMinutesAgo =
+  new Date(now - 30 * 60 * 1000).toISOString();
   const oneHourAgo =
     new Date(now - 60 * 60 * 1000).toISOString();
-
-  const fourHoursAgo =
-    new Date(now - 4 * 60 * 60 * 1000).toISOString();
+const twoHoursAgo =
+  new Date(now - 2 * 60 * 60 * 1000).toISOString();
+const fourHoursAgo =
+  new Date(now - 4 * 60 * 60 * 1000).toISOString();
+  const twelveHoursAgo =
+  new Date(now - 12 * 60 * 60 * 1000).toISOString();
 
   const today = new Date().toISOString().slice(0, 10);
-
-  const { data: bookings, error } = await supabaseAdmin
-    .from("bookings")
-    .select("id,host_id,status,created_at,start_date,end_date")
-    .eq("status", "requested")
-    .gte("start_date", today)
-    .lte("created_at", fifteenMinutesAgo)
-    .order("created_at", { ascending: true });
-
+const { data: bookings, error } = await supabaseAdmin
+  .from("bookings")
+  .select("id,host_id,status,created_at,start_date,end_date,vehicle:vehicles!bookings_vehicle_id_fkey(is_test_vehicle)")
+  .eq("status", "requested")
+  .gte("start_date", today)
+  .lte("created_at", fifteenMinutesAgo)
+  .order("created_at", { ascending: true });
   if (error) {
     throw new Error(
       `Unable to load requested bookings: ${error.message}`
@@ -299,15 +403,18 @@ async function runHostBookingReminders() {
   let fifteenMinutePushesAccepted = 0;
   let oneHourPushesAccepted = 0;
   let oneHourEmailsAccepted = 0;
-  let fourHourOwnerPushesAccepted = 0;
+
 
   for (const booking of bookings || []) {
+if (booking.vehicle?.is_test_vehicle === true) continue;
     if (!booking.host_id) continue;
 
     if (await send15MinuteReminder(booking)) {
       fifteenMinutePushesAccepted += 1;
     }
-
+if (booking.created_at <= thirtyMinutesAgo) {
+  await sendThirtyMinuteEscalation(booking);
+}
     if (booking.created_at <= oneHourAgo) {
       if (await sendOneHourPush(booking)) {
         oneHourPushesAccepted += 1;
@@ -317,12 +424,16 @@ async function runHostBookingReminders() {
         oneHourEmailsAccepted += 1;
       }
     }
+if (booking.created_at <= twoHoursAgo) {
+  await sendTwoHourEscalation(booking);
+}
 
-    if (booking.created_at <= fourHoursAgo) {
-      if (await sendFourHourEscalation(booking)) {
-        fourHourOwnerPushesAccepted += 1;
-      }
-    }
+if (booking.created_at <= fourHoursAgo) {
+  await sendFourHourEscalation(booking);
+}
+    if (booking.created_at <= twelveHoursAgo) {
+  await sendTwelveHourEscalation(booking);
+}
   }
 
   return {
@@ -330,7 +441,7 @@ async function runHostBookingReminders() {
     fifteenMinutePushesAccepted,
     oneHourPushesAccepted,
     oneHourEmailsAccepted,
-    fourHourOwnerPushesAccepted,
+
   };
 }
 

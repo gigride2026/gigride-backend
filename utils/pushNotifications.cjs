@@ -1,5 +1,11 @@
 async function sendExpoPushNotification({ to, title, body, data = {} }) {
-  if (!to || !String(to).startsWith("ExponentPushToken[")) {
+  if (
+  !to ||
+  !(
+    String(to).startsWith("ExponentPushToken[") ||
+    String(to).startsWith("ExpoPushToken[")
+  )
+) {
     console.log("Invalid Expo push token");
 
     return {
@@ -14,6 +20,7 @@ async function sendExpoPushNotification({ to, title, body, data = {} }) {
   const message = {
     to,
     sound: "default",
+priority: "high",
     title,
     body,
     data,

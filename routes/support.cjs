@@ -6,6 +6,7 @@ const authMiddleware = require("../middlewares/auth.cjs");
 const { requireStaff, requireOwner } = require("../middlewares/staffAuth.cjs");
 
 const { supabaseAdmin } = require("../utils/supabaseAdmin.cjs");
+const { notifyUser } = require("../utils/pushNotifications.cjs");
 const { sendSupportInviteCodeEmail } = require("../utils/email.cjs");
 
 // Every Support Center endpoint must pass both authentication
@@ -314,6 +315,37 @@ router.post("/customer/cases/:caseId/messages", authMiddleware, async (req, res)
       return res.status(500).json({ error: "Unable to send message" });
     }
 
+    // Notify GigRide owner when a customer or host replies.
+    try {
+      const ownerUserId = String(
+        process.env.GIGRIDE_OWNER_USER_ID || ""
+      ).trim();
+
+      if (ownerUserId && ownerUserId !== req.user.id) {
+        const pushResult = await notifyUser({
+          supabaseAdmin,
+          userId: ownerUserId,
+          title: "💬 New Support Reply",
+          body: "A customer replied to a GigRide support conversation.",
+          data: {
+            type: "owner_support_reply",
+            caseId,
+          },
+        });
+
+        if (!pushResult?.ok) {
+          console.warn(
+            "Owner support reply push not accepted:",
+            pushResult?.error
+          );
+        }
+      }
+    } catch (notificationError) {
+      console.error(
+        "Owner support reply notification failed:",
+        notificationError
+      );
+    }
     return res.status(201).json({ ok: true, message });
   } catch (error) {
     console.error("CUSTOMER MESSAGE ERROR:", error);
@@ -1067,7 +1099,32 @@ router.post("/cases", async (req, res) => {
         });
       }
     }
+// Reuse an existing host follow-up case for this booking.
+if (bookingId && category === "host" && subject === "Booking request follow-up") {
+  const { data: existingCase, error: lookupError } = await supabaseAdmin
+    .from("support_cases")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("booking_id", bookingId)
+    .eq("category", "host")
+    .eq("subject", "Booking request follow-up")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
+  if (lookupError) {
+    console.error("SUPPORT CASE LOOKUP ERROR:", lookupError.message);
+    return res.status(500).json({ error: "Unable to check existing support cases" });
+  }
+
+  if (existingCase) {
+    return res.status(200).json({
+      ok: true,
+      case: existingCase,
+      reused: true,
+    });
+  }
+}
     const { data: supportCase, error: insertError } = await supabaseAdmin
       .from("support_cases")
       .insert({
@@ -1530,7 +1587,7 @@ router.post("/cases/:caseId/messages", async (req, res) => {
 
     const { data: supportCase, error: caseError } = await supabaseAdmin
       .from("support_cases")
-      .select("id")
+      .select("id, customer_id")
       .eq("id", caseId)
       .maybeSingle();
 
@@ -1556,7 +1613,27 @@ router.post("/cases/:caseId/messages", async (req, res) => {
       console.error("SUPPORT MESSAGE SEND ERROR:", messageError.message);
       return res.status(500).json({ error: "Unable to send message" });
     }
+// Notify the customer when GigRide support sends a message.
+try {
+  if (supportCase.customer_id !== req.user.id) {
+    const pushResult = await notifyUser({
+      supabaseAdmin,
+      userId: supportCase.customer_id,
+      title: "💬 New GigRide Support Message",
+      body: "GigRide Support sent you a message. Open Support Center to reply.",
+      data: {
+        type: "support_message",
+        caseId,
+      },
+    });
 
+    if (!pushResult?.ok) {
+      console.warn("Support message push not accepted:", pushResult?.error);
+    }
+  }
+} catch (notificationError) {
+  console.error("Support message notification failed:", notificationError);
+}
     return res.status(201).json({ ok: true, message });
   } catch (error) {
     console.error("SUPPORT MESSAGE ERROR:", error);

@@ -22,8 +22,28 @@ test("Uncleared driver cannot create a rental checkout", async () => {
         if (request === "../utils/supabaseAdmin.cjs") {
           return {
             supabaseAdmin: {
-              from(table) {
-                assert.equal(table, "bookings");
+
+from(table) {
+  assert.ok(
+    table === "bookings" || table === "profiles",
+    `Unexpected table: ${table}`
+  );
+
+  if (table === "profiles") {
+    return {
+      select() { return this; },
+      eq() { return this; },
+      async maybeSingle() {
+        return {
+          data: {
+            identity_verified: true,
+            identity_status: "verified"
+          },
+          error: null
+        };
+      }
+    };
+  }
                 return {
                   select() { return this; },
                   eq() { return this; },

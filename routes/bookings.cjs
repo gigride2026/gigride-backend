@@ -229,28 +229,60 @@ const { data: approvalResult, error: updErr } = await supabaseAdmin
       });
     }
 
-if (!approvalResult) {
-  return res.status(409).json({
-    error: "Booking approval returned no result.",
-  });
-}
-const { data: updatedBooking, error: bookingErr } = await supabaseAdmin
-  .from("bookings")
-  .select("*")
-  .eq("id", bookingId)
-  .single();
+    if (!approvalResult) {
+      return res.status(409).json({
+        error: "Booking approval returned no result.",
+      });
+    }
 
-if (bookingErr || !updatedBooking) {
-  return res.status(500).json({
-    error: "Booking approved, but failed to retrieve updated booking.",
-  });
-}
+    const { data: updatedBooking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("*")
+      .eq("id", bookingId)
+      .single();
 
-return res.json({
-  ok: true,
-  booking: updatedBooking,
-  approval: approvalResult,
-});
+    if (bookingErr || !updatedBooking) {
+      return res.status(500).json({
+        error: "Booking approved, but failed to retrieve updated booking.",
+      });
+    }
+
+    // Notify GigRide owner when a host approves a booking.
+    try {
+      const ownerUserId = String(
+        process.env.GIGRIDE_OWNER_USER_ID || ""
+      ).trim();
+
+      if (ownerUserId) {
+        const result = await notifyUser({
+          supabaseAdmin,
+          userId: ownerUserId,
+          title: "✅ GigRide Booking Approved",
+          body: `A host approved booking ${bookingId}. The driver can proceed with the next booking steps.`,
+          data: {
+            type: "owner_booking_approved",
+            bookingId,
+            hostId: updatedBooking.host_id,
+            driverId: updatedBooking.driver_id,
+          },
+        });
+
+        if (!result?.ok) {
+          console.warn("Owner approval push not accepted:", result?.error);
+        }
+      }
+    } catch (notificationError) {
+      console.error(
+        "Owner approval notification failed:",
+        notificationError?.message || notificationError
+      );
+    }
+
+    return res.json({
+      ok: true,
+      booking: updatedBooking,
+      approval: approvalResult,
+    });
   } catch (e) {
     console.error("APPROVE ERROR:", e);
     return res.status(500).json({ error: e.message || "Server error" });
