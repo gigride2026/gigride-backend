@@ -374,6 +374,33 @@ router.post("/create-payment-link", authMiddleware, async (req, res) => {
       });
     }
 
+    // Require Didit identity verification before creating payment links.
+    const { data: driverProfile, error: driverProfileError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("identity_verified, identity_status")
+        .eq("id", driverId)
+        .maybeSingle();
+
+    if (driverProfileError) {
+      console.error("SQUARE DRIVER IDENTITY LOOKUP ERROR:", driverProfileError.message);
+      return res.status(500).json({
+        error: "Unable to verify driver identity.",
+      });
+    }
+
+    if (
+      !driverProfile ||
+      !(
+        driverProfile.identity_verified === true ||
+        driverProfile.identity_status === "verified"
+      )
+    ) {
+      return res.status(403).json({
+        error: "Identity verification is required before making payments.",
+      });
+    }
+
     if (payment_type === "deposit" && booking.deposit_paid === true) {
       return res.status(409).json({ error: "Security deposit is already paid." });
     }
