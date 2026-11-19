@@ -6,6 +6,11 @@ console.log("✅ bookings routes loaded");
 const express = require("express");
 const { createClient } = require("@supabase/supabase-js");
 const { notifyUser } = require("../utils/pushNotifications.cjs");
+const {
+  getDriverBackgroundCheck,
+  needsScreeningFee,
+  reserveDriverScreeningFee,
+} = require("../services/driverBackgroundChecks.cjs");
 
 const router = express.Router();
 
@@ -213,14 +218,10 @@ router.patch("/:id/host-approve", async (req, res) => {
         debug: { raw, clean },
       });
     }
-
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("bookings")
-      .update({ status: "pending", host_approved: true })
-      .eq("id", bookingId)
-      .select("*")
-      .single();
-
+const { data: approvalResult, error: updErr } = await supabaseAdmin
+  .rpc("approve_booking_with_screening", {
+    p_booking_id: bookingId,
+  });
     if (updErr) {
       return res.status(400).json({
         error: "Update failed",
@@ -228,38 +229,60 @@ router.patch("/:id/host-approve", async (req, res) => {
       });
     }
 
-    // Notify GigRide owner when a host approves a booking.
-try {
-  const ownerUserId = String(
-    process.env.GIGRIDE_OWNER_USER_ID || ""
-  ).trim();
-
-  if (ownerUserId && updated) {
-    const result = await notifyUser({
-      supabaseAdmin,
-      userId: ownerUserId,
-      title: "✅ GigRide Booking Approved",
-      body: `A host approved booking ${bookingId}. The driver can proceed with the next booking steps.`,
-      data: {
-        type: "owner_booking_approved",
-        bookingId,
-        hostId: updated.host_id,
-        driverId: updated.driver_id,
-      },
-    });
-
-    if (!result?.ok) {
-      console.warn("Owner approval push not accepted:", result?.error);
+    if (!approvalResult) {
+      return res.status(409).json({
+        error: "Booking approval returned no result.",
+      });
     }
-  }
-} catch (notificationError) {
-  console.error(
-    "Owner approval notification failed:",
-    notificationError?.message || notificationError
-  );
-}
 
-return res.json({ ok: true, booking: updated });
+    const { data: updatedBooking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("*")
+      .eq("id", bookingId)
+      .single();
+
+    if (bookingErr || !updatedBooking) {
+      return res.status(500).json({
+        error: "Booking approved, but failed to retrieve updated booking.",
+      });
+    }
+
+    // Notify GigRide owner when a host approves a booking.
+    try {
+      const ownerUserId = String(
+        process.env.GIGRIDE_OWNER_USER_ID || ""
+      ).trim();
+
+      if (ownerUserId) {
+        const result = await notifyUser({
+          supabaseAdmin,
+          userId: ownerUserId,
+          title: "✅ GigRide Booking Approved",
+          body: `A host approved booking ${bookingId}. The driver can proceed with the next booking steps.`,
+          data: {
+            type: "owner_booking_approved",
+            bookingId,
+            hostId: updatedBooking.host_id,
+            driverId: updatedBooking.driver_id,
+          },
+        });
+
+        if (!result?.ok) {
+          console.warn("Owner approval push not accepted:", result?.error);
+        }
+      }
+    } catch (notificationError) {
+      console.error(
+        "Owner approval notification failed:",
+        notificationError?.message || notificationError
+      );
+    }
+
+    return res.json({
+      ok: true,
+      booking: updatedBooking,
+      approval: approvalResult,
+    });
   } catch (e) {
     console.error("APPROVE ERROR:", e);
     return res.status(500).json({ error: e.message || "Server error" });
@@ -278,15 +301,17 @@ router.post("/:id/confirm-pickup", async (req, res) => {
 
     const { data: booking, error: bookingError } = await supabaseAdmin
   .from("bookings")
-  .select(`
-    id,
-    status,
-    host_id,
-    driver_id,
-    host_pickup_photos,
-    driver_pickup_photos,
-    start_odometer
-  `)
+ .select(`
+  id,
+  status,
+  host_id,
+  driver_id,
+  deposit_paid,
+  payment_status,
+  host_pickup_photos,
+  driver_pickup_photos,
+  start_odometer
+`)
   .eq("id", bookingId)
   .maybeSingle();
 
@@ -299,10 +324,22 @@ router.post("/:id/confirm-pickup", async (req, res) => {
     }
 
     if (booking.status !== "deposit_paid" && booking.status !== "pending") {
-      return res.status(400).json({
-        error: "Booking must be paid before pickup confirmation",
-      });
-    }
+  return res.status(400).json({
+    error: "Booking is not ready for pickup confirmation",
+  });
+}
+
+if (booking.deposit_paid !== true) {
+  return res.status(409).json({
+    error: "Security deposit must be paid before pickup confirmation.",
+  });
+}
+
+if (booking.payment_status !== "paid") {
+  return res.status(409).json({
+    error: "Rental payment must be completed before pickup confirmation.",
+  });
+}
 
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from("bookings")

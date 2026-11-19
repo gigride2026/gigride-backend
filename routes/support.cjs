@@ -315,6 +315,37 @@ router.post("/customer/cases/:caseId/messages", authMiddleware, async (req, res)
       return res.status(500).json({ error: "Unable to send message" });
     }
 
+    // Notify GigRide owner when a customer or host replies.
+    try {
+      const ownerUserId = String(
+        process.env.GIGRIDE_OWNER_USER_ID || ""
+      ).trim();
+
+      if (ownerUserId && ownerUserId !== req.user.id) {
+        const pushResult = await notifyUser({
+          supabaseAdmin,
+          userId: ownerUserId,
+          title: "💬 New Support Reply",
+          body: "A customer replied to a GigRide support conversation.",
+          data: {
+            type: "owner_support_reply",
+            caseId,
+          },
+        });
+
+        if (!pushResult?.ok) {
+          console.warn(
+            "Owner support reply push not accepted:",
+            pushResult?.error
+          );
+        }
+      }
+    } catch (notificationError) {
+      console.error(
+        "Owner support reply notification failed:",
+        notificationError
+      );
+    }
     return res.status(201).json({ ok: true, message });
   } catch (error) {
     console.error("CUSTOMER MESSAGE ERROR:", error);
@@ -1602,37 +1633,6 @@ try {
   }
 } catch (notificationError) {
   console.error("Support message notification failed:", notificationError);
-}
-// Notify GigRide owner when a host replies to a support case.
-try {
-  const ownerUserId = String(
-    process.env.GIGRIDE_OWNER_USER_ID || ""
-  ).trim();
-
-  if (ownerUserId && ownerUserId !== req.user.id) {
-    const pushResult = await notifyUser({
-      supabaseAdmin,
-      userId: ownerUserId,
-      title: "💬 New Support Reply",
-      body: "A customer replied to a GigRide support conversation.",
-      data: {
-        type: "owner_support_reply",
-        caseId,
-      },
-    });
-
-    if (!pushResult?.ok) {
-      console.warn(
-        "Owner support reply push not accepted:",
-        pushResult?.error
-      );
-    }
-  }
-} catch (notificationError) {
-  console.error(
-    "Owner support reply notification failed:",
-    notificationError
-  );
 }
     return res.status(201).json({ ok: true, message });
   } catch (error) {

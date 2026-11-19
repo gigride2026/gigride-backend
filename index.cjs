@@ -24,6 +24,7 @@ const squareRoutes = require("./routes/squareRoutes.cjs");
 const payoutRoutes = require("./routes/payoutRoutes.cjs");
 const diditRoutes = require("./routes/diditRoutes.cjs");
 const checkrRoutes = require("./routes/checkrRoutes.cjs");
+const checkrWebhook = require("./routes/checkrWebhook.cjs");
 const accountRoutes = require("./routes/account.cjs");
 const supportRoutes = require("./routes/support.cjs");
 
@@ -60,6 +61,7 @@ app.use("/api/paypal", paypalRoutes);
 app.use("/api/square", squareRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/didit", diditRoutes);
+app.use("/api/checkr", checkrWebhook);
 app.use("/api/checkr", checkrRoutes);
 app.use("/api/account", accountRoutes);
 app.use("/api/support", supportRoutes);
@@ -77,8 +79,11 @@ app.listen(PORT, "0.0.0.0", async () => {
   console.log("ENV HAS ANON KEY =", !!process.env.SUPABASE_ANON_KEY);
   console.log("ENV HAS DIDIT API KEY =", !!process.env.DIDIT_API_KEY);
   console.log("ENV HAS DIDIT WORKFLOW ID =", !!process.env.DIDIT_WORKFLOW_ID);
-
-  startSchedulers();
+  if (process.env.DISABLE_SCHEDULERS !== "true") {
+    startSchedulers();
+  } else {
+    console.log("⏸️ Scheduled jobs disabled for this environment");
+  }
 });
 
 module.exports = app;
